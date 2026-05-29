@@ -1,0 +1,21 @@
+# 虚拟环境
+.venv/
+
+# IDE配置
+.idea/
+
+# Python缓存
+__pycache__/
+*.pyc
+*.pyo
+
+# 环境变量（可能含密钥）
+.env
+
+# SQLite临时文件
+*.db-shm
+*.db-wal
+
+# 系统文件
+.DS_Store
+Thumbs.db

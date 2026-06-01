@@ -1,111 +1,96 @@
+@import "tailwindcss";
+
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
-
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
-
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
+  --bg-primary: #ffffff;
+  --bg-secondary: #f7f8fa;
+  --bg-sidebar: #f0f2f5;
+  --text-primary: #1a1a2e;
+  --text-secondary: #6b7280;
+  --bubble-user: #e8f0fe;
+  --bubble-ai: #ffffff;
+  --border-color: #e5e7eb;
+  --accent: #4f6ef7;
+  --radius: 16px;
+  --shadow: 0 2px 12px rgba(0,0,0,0.04);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
+.dark {
+  --bg-primary: #1e1e2e;
+  --bg-secondary: #2a2a3c;
+  --bg-sidebar: #252537;
+  --text-primary: #eaeaea;
+  --text-secondary: #a0a0b0;
+  --bubble-user: #2e3b4e;
+  --bubble-ai: #2a2a3c;
+  --border-color: #3f3f5a;
+  --accent: #7b8cff;
 }
 
-#root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
+* {
+  margin: 0;
+  padding: 0;
   box-sizing: border-box;
 }
 
 body {
-  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color 0.3s, color 0.3s;
 }
 
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
-}
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--text-secondary); border-radius: 3px; }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
+/* Markdown body styles */
+.markdown-body h1, .markdown-body h2, .markdown-body h3 {
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
 }
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
-p {
-  margin: 0;
-}
-
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
+.markdown-body p { margin-bottom: 0.75em; line-height: 1.7; }
+.markdown-body ul, .markdown-body ol { padding-left: 1.5em; margin-bottom: 0.75em; }
+.markdown-body li { margin-bottom: 0.25em; }
+.markdown-body code {
+  background: var(--bg-secondary);
+  padding: 0.15em 0.4em;
   border-radius: 4px;
-  color: var(--text-h);
+  font-size: 0.9em;
+}
+.markdown-body pre {
+  background: var(--bg-secondary);
+  padding: 1em;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin-bottom: 1em;
+}
+.markdown-body pre code {
+  background: none;
+  padding: 0;
+}
+.markdown-body table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-bottom: 1em;
+}
+.markdown-body th, .markdown-body td {
+  border: 1px solid var(--border-color);
+  padding: 0.5em 0.75em;
+  text-align: left;
+}
+.markdown-body blockquote {
+  border-left: 3px solid var(--accent);
+  padding-left: 1em;
+  color: var(--text-secondary);
+  margin-bottom: 0.75em;
 }
 
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+/* Slide-up animation */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-slide-up {
+  animation: slideUp 0.3s ease-out;
 }

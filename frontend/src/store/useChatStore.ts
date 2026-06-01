@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { Conversation, Message } from '../types/chat'
+import type { Conversation, Message } from '../types/chat'
 import { streamChat } from '../utils/api'
 
 function uuid(): string {

@@ -1,7 +1,7 @@
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
-import { Message } from '../../types/chat'
+import type { Message } from '../../types/chat'
 
 interface MessageBubbleProps {
   message: Message

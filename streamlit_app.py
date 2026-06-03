@@ -1,7 +1,8 @@
 # app.py - Streamlit 界面（美化版）
 import streamlit as st
-from app.agents.ai_chef import graph, chat_stream
+from app.agents.ai_chef import chat_stream
 import base64
+import re
 import sqlite3
 
 # ==================== 自定义 CSS 样式 ====================
@@ -215,55 +216,42 @@ st.markdown("""
 
 # ==================== 初始化数据库 ====================
 def init_db():
-    conn = sqlite3.connect('resources/personal_chief.db')
-    c = conn.cursor()
-
-    c.execute('''CREATE TABLE IF NOT EXISTS favorites (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        recipe_name TEXT,
-        recipe_content TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )''')
-
-    c.execute('''CREATE TABLE IF NOT EXISTS preferences (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        preference TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )''')
-
-    conn.commit()
-    conn.close()
+    with sqlite3.connect('resources/personal_chief.db') as conn:
+        c = conn.cursor()
+        c.execute('''CREATE TABLE IF NOT EXISTS favorites (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            recipe_name TEXT,
+            recipe_content TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''')
+        c.execute('''CREATE TABLE IF NOT EXISTS preferences (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            preference TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''')
 
 def save_favorite(recipe_name, recipe_content):
-    conn = sqlite3.connect('resources/personal_chief.db')
-    c = conn.cursor()
-    c.execute("INSERT INTO favorites (recipe_name, recipe_content) VALUES (?, ?)",
-              (recipe_name, recipe_content))
-    conn.commit()
-    conn.close()
+    with sqlite3.connect('resources/personal_chief.db') as conn:
+        c = conn.cursor()
+        c.execute("INSERT INTO favorites (recipe_name, recipe_content) VALUES (?, ?)",
+                  (recipe_name, recipe_content))
 
 def save_preference(preference):
-    conn = sqlite3.connect('resources/personal_chief.db')
-    c = conn.cursor()
-    c.execute("INSERT INTO preferences (preference) VALUES (?)", (preference,))
-    conn.commit()
-    conn.close()
+    with sqlite3.connect('resources/personal_chief.db') as conn:
+        c = conn.cursor()
+        c.execute("INSERT INTO preferences (preference) VALUES (?)", (preference,))
 
 def get_favorites():
-    conn = sqlite3.connect('resources/personal_chief.db')
-    c = conn.cursor()
-    c.execute("SELECT recipe_name, created_at FROM favorites ORDER BY created_at DESC")
-    favorites = c.fetchall()
-    conn.close()
-    return favorites
+    with sqlite3.connect('resources/personal_chief.db') as conn:
+        c = conn.cursor()
+        c.execute("SELECT recipe_name, created_at FROM favorites ORDER BY created_at DESC")
+        return c.fetchall()
 
 def get_preferences():
-    conn = sqlite3.connect('resources/personal_chief.db')
-    c = conn.cursor()
-    c.execute("SELECT preference FROM preferences ORDER BY created_at DESC")
-    preferences = c.fetchall()
-    conn.close()
-    return [p[0] for p in preferences]
+    with sqlite3.connect('resources/personal_chief.db') as conn:
+        c = conn.cursor()
+        c.execute("SELECT preference FROM preferences ORDER BY created_at DESC")
+        return [p[0] for p in c.fetchall()]
 
 init_db()
 
@@ -416,8 +404,7 @@ if user_input:
                 "content": ai_response
             })
 
-        if "收藏" in user_input and ai_response:
-            import re
+        if re.search(r'(帮我)?收藏(这个|一下|菜谱|这道)', user_input) and ai_response:
             recipe_name = "菜谱"
             titles = re.findall(r'\*\*(.*?)\*\*', ai_response)
             if titles:
@@ -426,13 +413,16 @@ if user_input:
             save_favorite(recipe_name, ai_response)
             st.success(f"已收藏：{recipe_name}")
 
-        if "偏好" in user_input or "忌口" in user_input:
+        if re.search(r'(我(的)?偏好|我忌口|我不吃|过敏)', user_input):
             save_preference(user_input)
             st.success("已记住你的偏好")
 
     except Exception as e:
         st.error(f"出错了：{e}")
         st.write("请检查网络连接和API配置")
+
+    # 清除已使用的图片，避免下次对话重复发送
+    st.session_state.uploaded_image = None
 
 # ==================== 侧边栏 ====================
 with st.sidebar:
@@ -442,8 +432,8 @@ with st.sidebar:
     1. 上传食材照片（可选）
     2. 在文本框中输入你的食材
     3. AI 会为你推荐合适的菜谱
-    4. 说"收藏"可以保存菜谱
-    5. 说"忌口"可以记住偏好
+    4. 说"收藏这个"可以保存菜谱
+    5. 说"我忌口..."可以记住偏好
     """)
 
     st.markdown('<hr class="organic-rule" style="width:100%; margin: 1rem 0;">', unsafe_allow_html=True)

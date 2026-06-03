@@ -1,5 +1,5 @@
 # main.py - AI私人厨师主程序
-from app.agents.ai_chef import agent
+from app.agents.ai_chef import graph as agent
 
 def main():
   print("=" * 50)

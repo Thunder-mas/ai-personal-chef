@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
+import logging
 from typing import TypedDict, Annotated, Sequence
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from langchain_core.tools import tool
@@ -10,6 +11,8 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
+
+logger = logging.getLogger(__name__)
 
 # ==================== 1. 定义 State ====================
 class AgentState(TypedDict):
@@ -20,25 +23,23 @@ system_prompt = """
 你是一名私人厨师。根据用户提供的食材，推荐合适的菜谱。
 优先调用 search_recipe 工具搜索菜谱，再搜索不到的情况下才能自己发挥。
 
-重要：当需要展示菜品图片时，必须使用标准 Markdown 图片语法，格式如下：
-![菜名](图片URL)
-例如：![番茄炒蛋](https://example.com/image.jpg)
-
 重要：如果用户说"收藏这个菜谱"，请回复"已收藏"并提取菜谱名称。
 重要：如果用户说"我的偏好是..."或"我忌口..."，请记住并回复"已记住你的偏好"。
 """
 
 # ==================== 3. 定义 Tools ====================
+from langchain_tavily import TavilySearch
+
+_tavily_search = TavilySearch(
+    max_results=3,
+    topic='general',
+    tavily_api_key=os.getenv('TAVILY_API_KEY')
+)
+
 @tool
 def search_recipe(query: str) -> str:
     """搜索菜谱，根据食材查找推荐菜谱"""
-    from langchain_tavily import TavilySearch
-    search = TavilySearch(
-        max_results=3,
-        topic='general',
-        tavily_api_key=os.getenv('TAVILY_API_KEY')
-    )
-    result = search.invoke(query)
+    result = _tavily_search.invoke(query)
     return str(result)
 
 # 工具列表
@@ -62,9 +63,9 @@ def agent_node(state: AgentState):
     # 调试信息
     if hasattr(response, "tool_calls") and response.tool_calls:
         tool_names = [tc.name if hasattr(tc, 'name') else str(tc) for tc in response.tool_calls]
-        print(f"[DEBUG] AI 决定调用工具: {tool_names}")
+        logger.debug("AI 决定调用工具: %s", tool_names)
     else:
-        print(f"[DEBUG] AI 直接回复，不调用工具")
+        logger.debug("AI 直接回复，不调用工具")
 
     return {"messages": [response]}
 
@@ -74,9 +75,9 @@ tool_node = ToolNode(tools)
 # 包装 tool_node 添加调试信息
 def tool_node_with_debug(state: AgentState):
     """调用工具并添加调试信息"""
-    print(f"[DEBUG] 正在调用工具...")
+    logger.debug("正在调用工具...")
     result = tool_node.invoke(state)
-    print(f"[DEBUG] 工具调用完成")
+    logger.debug("工具调用完成")
     return result
 
 # ==================== 6. 定义 Conditions ====================
@@ -116,18 +117,25 @@ graph = workflow.compile()
 # ==================== 8. 流式输出函数 ====================
 def chat_stream(messages):
     """流式聊天 - 使用 LangGraph"""
-    # 转换消息格式
+    # 转换消息格式（保留完整对话历史）
     input_messages = []
     for msg in messages:
-        if msg["role"] == "user":
-            content = msg["content"]
+        role = msg["role"]
+        content = msg["content"]
+        if role == "user":
             if isinstance(content, list):
                 input_messages.append(HumanMessage(content=content))
             else:
                 input_messages.append(HumanMessage(content=content))
+        elif role == "assistant" and isinstance(content, str):
+            input_messages.append(AIMessage(content=content))
 
     # 使用 stream 模式运行图
     for chunk in graph.stream({"messages": input_messages}):
+        # 工具调用阶段提示
+        if "tools" in chunk:
+            yield "🔍 正在搜索菜谱...\n\n"
+
         # 检查是否是 agent 节点的输出
         if "agent" in chunk:
             agent_output = chunk["agent"]

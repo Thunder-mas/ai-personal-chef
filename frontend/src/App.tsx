@@ -27,19 +27,19 @@ function App() {
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <div className="flex-1 flex flex-col min-w-0 h-full">
-        {/* Mobile header */}
+        {/* Header bar */}
         <div
-          className="md:hidden flex items-center p-3"
+          className="flex items-center px-4 py-3"
           style={{ borderBottom: '1px solid var(--border-color)' }}
         >
           <button
             onClick={() => setSidebarOpen(true)}
-            className="p-2 rounded-lg"
+            className="p-2 rounded-lg md:hidden"
             style={{ color: 'var(--text-secondary)' }}
           >
             <Menu size={20} />
           </button>
-          <span className="ml-2 font-bold" style={{ color: 'var(--text-primary)' }}>
+          <span className="ml-1 md:ml-0 font-bold text-lg" style={{ color: 'var(--text-primary)' }}>
             AI Chef
           </span>
         </div>

@@ -28,10 +28,10 @@ export function InputArea() {
 
   return (
     <div
-      className="px-4 py-3"
+      className="px-4 py-4"
       style={{ borderTop: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)' }}
     >
-      <div className="max-w-3xl mx-auto flex items-end gap-2">
+      <div className="max-w-2xl mx-auto flex items-end gap-2">
         <button
           className="shrink-0 p-3 rounded-xl transition-colors"
           style={{ color: 'var(--text-secondary)' }}

@@ -13,7 +13,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} animate-slide-up`}>
       <div
-        className={`max-w-[80%] px-4 py-3 shadow-sm ${
+        className={`max-w-[75%] px-4 py-3 shadow-sm ${
           isUser
             ? 'rounded-2xl rounded-br-md'
             : 'rounded-2xl rounded-bl-md markdown-body'

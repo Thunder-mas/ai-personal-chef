@@ -1,77 +1,164 @@
-import { useState, useRef, useEffect } from 'react'
-import { Send, Paperclip } from 'lucide-react'
+import { useState, useRef, type KeyboardEvent } from 'react'
+import { Send, ImagePlus, X } from 'lucide-react'
 import { useChatStore } from '../../store/useChatStore'
+
+interface ImagePreview {
+  file: File
+  preview: string
+}
 
 export function InputArea() {
   const [input, setInput] = useState('')
+  const [images, setImages] = useState<ImagePreview[]>([])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const sendMessage = useChatStore((s) => s.sendMessage)
   const isStreaming = useChatStore((s) => s.isStreaming)
 
+  const adjustHeight = () => {
+    const textarea = textareaRef.current
+    if (!textarea) return
+    textarea.style.height = 'auto'
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 150)}px`
+  }
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value)
+    adjustHeight()
+  }
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files) return
+
+    const newImages: ImagePreview[] = Array.from(files).map((file) => ({
+      file,
+      preview: URL.createObjectURL(file),
+    }))
+
+    setImages((prev) => [...prev, ...newImages])
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  const removeImage = (index: number) => {
+    setImages((prev) => {
+      const removed = prev[index]
+      URL.revokeObjectURL(removed.preview)
+      return prev.filter((_, i) => i !== index)
+    })
+  }
+
   const handleSend = async () => {
-    if (!input.trim() || isStreaming) return
-    const msg = input.trim()
+    const trimmed = input.trim()
+    if ((!trimmed && images.length === 0) || isStreaming) return
+    await sendMessage(trimmed)
     setInput('')
+    setImages([])
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
-    await sendMessage(msg)
   }
 
-  useEffect(() => {
-    const el = textareaRef.current
-    if (el) {
-      el.style.height = 'auto'
-      el.style.height = Math.min(el.scrollHeight, 150) + 'px'
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
     }
-  }, [input])
+  }
 
   return (
-    <div
-      className="px-4 py-4"
-      style={{ borderTop: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)' }}
-    >
-      <div className="max-w-2xl mx-auto flex items-end gap-2">
-        <button
-          className="shrink-0 p-3 rounded-xl transition-colors"
-          style={{ color: 'var(--text-secondary)' }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent)' }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-secondary)' }}
-          aria-label="上传图片"
+    <div className="pb-4 pt-2">
+      <div className="max-w-2xl mx-auto">
+        <div
+          className="rounded-2xl border px-4 pt-3 pb-2"
+          style={{
+            borderColor: 'var(--border-color)',
+            backgroundColor: 'var(--bg-secondary)',
+          }}
         >
-          <Paperclip size={20} />
-        </button>
+          {images.length > 0 && (
+            <div className="flex gap-2 pb-3 flex-wrap">
+              {images.map((img, index) => (
+                <div key={index} className="relative group">
+                  <img
+                    src={img.preview}
+                    alt="上传图片"
+                    className="w-20 h-20 object-cover rounded-lg"
+                  />
+                  <button
+                    onClick={() => removeImage(index)}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    style={{ backgroundColor: 'var(--accent)', color: '#fff' }}
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
 
         <textarea
           ref={textareaRef}
           value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              handleSend()
-            }
-          }}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
           placeholder="告诉 AI Chef 你想吃什么..."
           rows={1}
-          className="flex-1 resize-none rounded-xl px-4 py-3 outline-none text-sm"
+          className="w-full resize-none bg-transparent outline-none"
           style={{
-            border: '1px solid var(--border-color)',
-            backgroundColor: 'var(--bg-secondary)',
             color: 'var(--text-primary)',
+            fontSize: '16px',
+            lineHeight: '1.5',
             maxHeight: '150px',
           }}
+          disabled={isStreaming}
         />
 
-        <button
-          onClick={handleSend}
-          disabled={!input.trim() || isStreaming}
-          className="shrink-0 p-3 rounded-xl text-white transition-opacity disabled:opacity-40"
-          style={{ backgroundColor: 'var(--accent)' }}
-        >
-          <Send size={20} />
-        </button>
+        <div className="flex items-center justify-between pt-2">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors"
+            style={{
+              color: 'var(--text-secondary)',
+              border: '1px solid var(--border-color)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = 'var(--accent)'
+              e.currentTarget.style.color = 'var(--accent)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = 'var(--border-color)'
+              e.currentTarget.style.color = 'var(--text-secondary)'
+            }}
+          >
+            <ImagePlus size={14} />
+            上传图片
+          </button>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={handleImageUpload}
+            className="hidden"
+          />
+
+          <button
+            onClick={handleSend}
+            disabled={(!input.trim() && images.length === 0) || isStreaming}
+            className="w-9 h-9 rounded-full flex items-center justify-center text-white disabled:opacity-40 hover:opacity-90 transition-opacity"
+            style={{ backgroundColor: 'var(--accent)' }}
+            aria-label="发送消息"
+          >
+            <Send size={18} />
+          </button>
+        </div>
       </div>
     </div>
+  </div>
   )
 }

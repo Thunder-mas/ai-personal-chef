@@ -11,24 +11,25 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === 'user'
 
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} animate-slide-up`}>
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`max-w-[75%] px-4 py-3 shadow-sm ${
+        className={`max-w-[80%] px-4 py-3 ${
           isUser
-            ? 'rounded-2xl rounded-br-md'
-            : 'rounded-2xl rounded-bl-md markdown-body'
+            ? 'bg-[var(--bubble-user)] rounded-2xl rounded-br-md'
+            : 'bg-[var(--bubble-ai)] rounded-2xl rounded-bl-md shadow-[var(--shadow)]'
         }`}
-        style={{
-          backgroundColor: isUser ? 'var(--bubble-user)' : 'var(--bubble-ai)',
-          color: 'var(--text-primary)',
-        }}
       >
         {isUser ? (
-          <p className="whitespace-pre-wrap">{message.content}</p>
+          <p className="whitespace-pre-wrap break-words">{message.content}</p>
         ) : (
-          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
-            {message.content}
-          </ReactMarkdown>
+          <div className="markdown-body">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypeHighlight]}
+            >
+              {message.content}
+            </ReactMarkdown>
+          </div>
         )}
       </div>
     </div>

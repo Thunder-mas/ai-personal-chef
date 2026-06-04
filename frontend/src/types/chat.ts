@@ -21,4 +21,5 @@ export interface Conversation {
   title: string
   lastUpdated: number
   messages: Message[]
+  pinned?: boolean
 }

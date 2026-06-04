@@ -21,6 +21,8 @@ interface ChatState {
   createNewChat: () => void
   switchConversation: (id: string) => void
   deleteConversation: (id: string) => void
+  renameConversation: (id: string, title: string) => void
+  togglePinConversation: (id: string) => void
   setSearchTerm: (term: string) => void
   toggleDarkMode: () => void
   sendMessage: (content: string) => Promise<void>
@@ -69,6 +71,22 @@ export const useChatStore = create<ChatState>()(
             currentConversationId: newCurrentId,
           }
         })
+      },
+
+      renameConversation: (id, title) => {
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === id ? { ...c, title } : c
+          ),
+        }))
+      },
+
+      togglePinConversation: (id) => {
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === id ? { ...c, pinned: !c.pinned } : c
+          ),
+        }))
       },
 
       setSearchTerm: (term) => set({ searchTerm: term }),
@@ -194,10 +212,16 @@ export const useChatStore = create<ChatState>()(
       filteredConversations: () => {
         const state = get()
         const term = state.searchTerm.toLowerCase()
-        if (!term) return state.conversations
-        return state.conversations.filter((c) =>
-          c.title.toLowerCase().includes(term)
-        )
+        const filtered = term
+          ? state.conversations.filter((c) =>
+              c.title.toLowerCase().includes(term)
+            )
+          : state.conversations
+        return [...filtered].sort((a, b) => {
+          if (a.pinned && !b.pinned) return -1
+          if (!a.pinned && b.pinned) return 1
+          return b.lastUpdated - a.lastUpdated
+        })
       },
     }),
     {

@@ -1,6 +1,11 @@
 @import "tailwindcss";
 
 :root {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  --font-mono: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+  --font-size-base: 16px;
+  --line-height-base: 1.6;
+
   --bg-primary: #ffffff;
   --bg-secondary: #f7f8fa;
   --bg-sidebar: #f0f2f5;
@@ -10,20 +15,24 @@
   --bubble-ai: #ffffff;
   --border-color: #e5e7eb;
   --accent: #4f6ef7;
-  --radius: 16px;
   --shadow: 0 2px 12px rgba(0,0,0,0.04);
+  --radius-xl: 16px;
+  --radius-lg: 12px;
+  --radius-md: 8px;
+  --radius-sm: 4px;
 }
 
 .dark {
-  --bg-primary: #1e1e2e;
-  --bg-secondary: #2a2a3c;
-  --bg-sidebar: #252537;
+  --bg-primary: #1a1a2e;
+  --bg-secondary: #353550;
+  --bg-sidebar: #232338;
   --text-primary: #eaeaea;
   --text-secondary: #a0a0b0;
-  --bubble-user: #2e3b4e;
-  --bubble-ai: #2a2a3c;
+  --bubble-user: #3a3a4a;
+  --bubble-ai: transparent;
   --border-color: #3f3f5a;
   --accent: #7b8cff;
+  --shadow: 0 2px 12px rgba(0,0,0,0.15);
 }
 
 * {
@@ -33,7 +42,9 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
   background-color: var(--bg-primary);
   color: var(--text-primary);
   transition: background-color 0.3s, color 0.3s;
@@ -49,30 +60,41 @@ body {
   margin-bottom: 0.5em;
   font-weight: 600;
 }
-.markdown-body p { margin-bottom: 0.75em; line-height: 1.7; }
-.markdown-body ul, .markdown-body ol { padding-left: 1.5em; margin-bottom: 0.75em; }
+.markdown-body h1 { font-size: 1.25em; }
+.markdown-body h2 { font-size: 1.15em; }
+.markdown-body h3 { font-size: 1.1em; }
+.markdown-body p { margin-bottom: 0.5em; line-height: 1.6; }
+.markdown-body ul, .markdown-body ol { padding-left: 1.5em; margin-bottom: 0.5em; }
 .markdown-body li { margin-bottom: 0.25em; }
 .markdown-body code {
-  background: var(--bg-secondary);
-  padding: 0.15em 0.4em;
-  border-radius: 4px;
-  font-size: 0.9em;
+  background: rgba(0,0,0,0.05);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 14px;
+}
+.dark .markdown-body code {
+  background: rgba(255,255,255,0.1);
 }
 .markdown-body pre {
-  background: var(--bg-secondary);
-  padding: 1em;
-  border-radius: 8px;
+  background: #1e1e2e;
+  color: #eaeaea;
+  padding: 12px;
+  border-radius: var(--radius-md);
   overflow-x: auto;
-  margin-bottom: 1em;
+  margin: 0.8em 0;
+  font-family: var(--font-mono);
+  font-size: 14px;
 }
 .markdown-body pre code {
   background: none;
   padding: 0;
+  color: inherit;
 }
 .markdown-body table {
   border-collapse: collapse;
   width: 100%;
-  margin-bottom: 1em;
+  margin-bottom: 0.5em;
 }
 .markdown-body th, .markdown-body td {
   border: 1px solid var(--border-color);
@@ -83,14 +105,14 @@ body {
   border-left: 3px solid var(--accent);
   padding-left: 1em;
   color: var(--text-secondary);
-  margin-bottom: 0.75em;
+  margin-bottom: 0.5em;
 }
 
 /* Slide-up animation */
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
 .animate-slide-up {
-  animation: slideUp 0.3s ease-out;
+  animation: slideUp 0.2s ease-out;
 }

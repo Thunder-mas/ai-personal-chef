@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Heart, Clock, Users, ChefHat } from 'lucide-react'
 import type { RecipeData } from '../../types/chat'
 import { useChatStore } from '../../store/useChatStore'
@@ -8,8 +7,9 @@ interface RecipeCardProps {
 }
 
 export function RecipeCard({ recipe }: RecipeCardProps) {
-  const [isFavorite, setIsFavorite] = useState(false)
-  const { toggleFavoriteRecipe } = useChatStore()
+  const { conversations, currentConversationId, toggleFavoriteRecipe } = useChatStore()
+  const currentConv = conversations.find(c => c.id === currentConversationId)
+  const isFavorite = currentConv?.favoriteRecipes?.includes(recipe.name) ?? false
 
   const difficultyColor = {
     '简单': 'text-green-500',
@@ -18,8 +18,7 @@ export function RecipeCard({ recipe }: RecipeCardProps) {
   }
 
   const handleFavorite = () => {
-    setIsFavorite(!isFavorite)
-    toggleFavoriteRecipe?.(recipe.name)
+    toggleFavoriteRecipe(recipe.name)
   }
 
   return (

@@ -1,5 +1,6 @@
 # main.py - AI私人厨师主程序
 from app.agents.ai_chef import graph as agent
+from app.recipe_text import format_recipe_blocks
 
 def main():
   print("=" * 50)
@@ -30,10 +31,10 @@ def main():
               "messages": [{"role": "user", "content": user_input}]
           })
 
-          # 显示结果
+          # 显示结果（把菜谱 JSON 渲染成可读文本，避免原样打印）
           print("AI 建议：")
           print("-" * 50)
-          print(response["messages"][-1].content)
+          print(format_recipe_blocks(response["messages"][-1].content, markdown=False))
           print("-" * 50)
 
       except Exception as e:

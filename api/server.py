@@ -11,6 +11,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.agents.ai_chef import chat_stream
+from app.preferences import get_preferences, add_preference, remove_preference
 
 app = FastAPI(title="AI Personal Chef API")
 
@@ -32,6 +33,10 @@ class ChatRequest(BaseModel):
     messages: List[Message]
 
 
+class PreferenceRequest(BaseModel):
+    preference: str
+
+
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
     messages = [msg.model_dump() for msg in request.messages]
@@ -45,6 +50,23 @@ async def chat(request: ChatRequest):
             yield f"data: {json.dumps({'type': 'error', 'content': str(e)}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@app.get("/api/preferences")
+async def list_preferences():
+    return {"preferences": get_preferences()}
+
+
+@app.post("/api/preferences")
+async def create_preference(req: PreferenceRequest):
+    add_preference(req.preference)
+    return {"preferences": get_preferences()}
+
+
+@app.delete("/api/preferences")
+async def delete_preference(req: PreferenceRequest):
+    remove_preference(req.preference)
+    return {"preferences": get_preferences()}
 
 
 @app.get("/api/health")

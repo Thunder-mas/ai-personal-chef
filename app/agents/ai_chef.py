@@ -5,49 +5,59 @@ load_dotenv()
 import os
 import logging
 from typing import TypedDict, Annotated, Sequence
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, AIMessageChunk, SystemMessage
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 
+from app.preferences import add_preference, remove_preference, get_preferences, init_pref_db
+
 logger = logging.getLogger(__name__)
+
+# 确保偏好表存在
+init_pref_db()
 
 # ==================== 1. 定义 State ====================
 class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
 
 # ==================== 2. 定义系统提示 ====================
-system_prompt = """
-你是一名私人厨师。根据用户提供的食材，推荐合适的菜谱。
-优先调用 search_recipe 工具搜索菜谱，再搜索不到的情况下才能自己发挥。
+system_prompt = """你是私人厨师。根据用户食材推荐菜谱。优先用 search_recipe 工具搜索。
 
-## 菜谱返回格式
+## 菜谱格式（必须严格遵守）
 
-当你推荐菜谱时，请使用以下JSON格式返回结构化数据：
+推荐菜谱时，用以下格式返回（前端会渲染为卡片）：
 
 ```recipe
-{
-  "name": "菜名",
-  "description": "简短描述",
-  "difficulty": "简单/中等/复杂",
-  "cookingTime": "时间",
-  "servings": 人数,
-  "ingredients": [{"name": "食材", "amount": "用量", "emoji": "可选图标"}],
-  "steps": ["步骤1", "步骤2"],
-  "tips": "可选小贴士",
-  "tags": ["标签1", "标签2"]
-}
+{"name":"菜名","description":"简短描述","difficulty":"简单","cookingTime":"20分钟","servings":2,"ingredients":[{"name":"食材","amount":"用量","emoji":"图标"}],"steps":["步骤1","步骤2"],"tips":"小贴士","tags":["标签"]}
 ```
 
-这样前端可以渲染精美的菜谱卡片。在JSON前后可以添加说明文字。
+规则：
+- 必须是完整合法的单行JSON，包含所有字段
+- difficulty只能是"简单""中等""复杂"
+- JSON前后可加简短说明（不超过2句话）
 
-## 其他说明
+## 一周食谱规划格式
 
-- 如果用户说"收藏这个菜谱"，请回复"已收藏"并提取菜谱名称。
-- 如果用户说"我的偏好是..."或"我忌口..."，请记住并回复"已记住你的偏好"。
-"""
+当用户要求"规划一周食谱/每周菜单/安排一周吃什么"等，用以下格式返回（前端渲染为周计划卡片）：
+
+```mealplan
+{"title":"本周食谱","days":[{"day":"周一","meals":[{"name":"菜名","brief":"一句话简述","ingredients":[{"name":"食材","amount":"用量","emoji":"图标"}]}]}]}
+```
+
+规则：
+- days 必须是完整的7天（周一到周日）
+- 每天1-2道菜，每道菜都要带 ingredients（食材名+用量），方便生成购物清单
+- 食材精简，整体必须是合法的单行JSON
+
+## 偏好记忆
+- 用户提到口味偏好、忌口、过敏、不吃的食材时，调用 save_preference 工具逐条记录（如"不吃香菜"、"对花生过敏"、"喜欢清淡"），然后回复"已记住"。
+- 用户说不再需要某条偏好时，调用 forget_preference 删除。
+- 推荐菜谱时，必须避开用户的忌口与过敏项，并尽量贴合口味偏好。
+
+其他：用户说"收藏"就回复"已收藏"。"""
 
 # ==================== 3. 定义 Tools ====================
 from langchain_tavily import TavilySearch
@@ -64,22 +74,48 @@ def search_recipe(query: str) -> str:
     result = _tavily_search.invoke(query)
     return str(result)
 
+@tool
+def save_preference(preference: str) -> str:
+    """记录用户的饮食偏好、忌口、过敏或不吃的食材。每条单独记录，如"不吃香菜""对花生过敏""喜欢清淡"。"""
+    add_preference(preference)
+    return f"已记住：{preference}"
+
+@tool
+def forget_preference(preference: str) -> str:
+    """删除之前记录的某条用户偏好。"""
+    remove_preference(preference)
+    return f"已删除偏好：{preference}"
+
 # 工具列表
-tools = [search_recipe]
+tools = [search_recipe, save_preference, forget_preference]
 
 # ==================== 4. 定义模型 ====================
 model = ChatOpenAI(
     model="mimo-v2.5",
     openai_api_key=os.getenv('MIMO_API_KEY'),
     openai_api_base=os.getenv('MIMO_BASE_URL'),
+    max_tokens=4096,
     streaming=True,
 ).bind_tools(tools)
 
 # ==================== 5. 定义 Nodes ====================
+def _build_system_prompt() -> str:
+    """把当前已记录的用户偏好动态拼进系统提示，让每次推荐都遵守。"""
+    prefs = get_preferences()
+    if not prefs:
+        return system_prompt
+    pref_lines = "\n".join(f"- {p}" for p in prefs)
+    return (
+        system_prompt
+        + "\n\n## 用户偏好（必须遵守）\n"
+        + pref_lines
+        + "\n推荐菜谱时务必避开以上忌口/过敏项，并尽量贴合口味偏好。"
+    )
+
 def agent_node(state: AgentState):
     """AI 模型思考并决定是否调用工具"""
     messages = state["messages"]
-    system_message = SystemMessage(content=system_prompt)
+    system_message = SystemMessage(content=_build_system_prompt())
     response = model.invoke([system_message] + messages)
 
     # 调试信息
@@ -152,17 +188,17 @@ def chat_stream(messages):
         elif role == "assistant" and isinstance(content, str):
             input_messages.append(AIMessage(content=content))
 
-    # 使用 stream 模式运行图
-    for chunk in graph.stream({"messages": input_messages}):
-        # 工具调用阶段提示
-        if "tools" in chunk:
-            yield "🔍 正在搜索菜谱...\n\n"
-
-        # 检查是否是 agent 节点的输出
-        if "agent" in chunk:
-            agent_output = chunk["agent"]
-            if "messages" in agent_output:
-                for msg in agent_output["messages"]:
-                    # 只输出 AI 的文本回复
-                    if isinstance(msg, AIMessage) and msg.content:
-                        yield msg.content
+    # messages 模式实现逐 token 流式输出；updates 模式捕获工具节点，给出搜索提示
+    for mode, chunk in graph.stream(
+        {"messages": input_messages},
+        stream_mode=["updates", "messages"],
+    ):
+        if mode == "updates":
+            # 工具节点执行完毕后提示正在搜索
+            if "tools" in chunk:
+                yield "🔍 正在搜索菜谱...\n\n"
+        elif mode == "messages":
+            token, _metadata = chunk
+            # 只输出 AI 生成的文本 token（跳过工具调用的空内容和工具返回结果）
+            if isinstance(token, AIMessageChunk) and token.content:
+                yield token.content

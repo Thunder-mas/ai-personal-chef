@@ -1,6 +1,7 @@
 # app.py - Streamlit 界面（美化版）
 import streamlit as st
 from app.agents.ai_chef import chat_stream
+from app.recipe_text import format_recipe_blocks, extract_first_recipe_name
 import base64
 import re
 import sqlite3
@@ -345,7 +346,14 @@ else:
 # 显示对话历史
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+        content = message["content"]
+        if not isinstance(content, str):
+            # 用户上传图片时 content 是列表，不直接渲染
+            st.markdown("上传了图片")
+        elif message["role"] == "assistant":
+            st.markdown(format_recipe_blocks(content))
+        else:
+            st.markdown(content)
 
 # 图片上传（紧凑样式，紧贴输入框上方）
 uploaded_file = st.file_uploader(
@@ -396,7 +404,12 @@ if user_input:
         all_messages = st.session_state.messages.copy()
 
         with st.chat_message("assistant"):
-            ai_response = st.write_stream(chat_stream(all_messages))
+            placeholder = st.empty()
+            ai_response = ""
+            for chunk in chat_stream(all_messages):
+                ai_response += chunk
+                # 边流式边渲染：菜谱 JSON 写完后会被替换成可读文本
+                placeholder.markdown(format_recipe_blocks(ai_response))
 
         if ai_response:
             st.session_state.messages.append({
@@ -404,14 +417,20 @@ if user_input:
                 "content": ai_response
             })
 
-        if re.search(r'(帮我)?收藏(这个|一下|菜谱|这道)', user_input) and ai_response:
-            recipe_name = "菜谱"
-            titles = re.findall(r'\*\*(.*?)\*\*', ai_response)
-            if titles:
-                recipe_name = titles[0]
+        if re.search(r'(帮我)?收藏(这个|一下|菜谱|这道)', user_input):
+            # 菜谱 JSON 通常在更早的助手回复里，往回找最近一条带菜谱的消息
+            recipe_name = None
+            recipe_content = ai_response
+            for msg in reversed(st.session_state.messages):
+                if msg["role"] == "assistant" and isinstance(msg["content"], str):
+                    name = extract_first_recipe_name(msg["content"])
+                    if name:
+                        recipe_name = name
+                        recipe_content = msg["content"]
+                        break
 
-            save_favorite(recipe_name, ai_response)
-            st.success(f"已收藏：{recipe_name}")
+            save_favorite(recipe_name or "菜谱", recipe_content)
+            st.success(f"已收藏：{recipe_name or '菜谱'}")
 
         if re.search(r'(我(的)?偏好|我忌口|我不吃|过敏)', user_input):
             save_preference(user_input)

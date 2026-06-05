@@ -9,20 +9,14 @@ export function TypingIndicator() {
           {[0, 1, 2].map((i) => (
             <div
               key={i}
-              className="w-2 h-2 rounded-full"
+              className="w-2 h-2 rounded-full typing-dot"
               style={{
                 backgroundColor: 'var(--text-secondary)',
-                animation: `bounce 1.4s ease-in-out ${i * 0.2}s infinite`,
+                animationDelay: `${i * 0.2}s`,
               }}
             />
           ))}
         </div>
-        <style>{`
-          @keyframes bounce {
-            0%, 80%, 100% { transform: translateY(0); }
-            40% { transform: translateY(-6px); }
-          }
-        `}</style>
       </div>
     </div>
   )

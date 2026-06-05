@@ -4,6 +4,7 @@ export interface Message {
   content: string
   timestamp: number
   status?: 'sending' | 'streaming' | 'done' | 'error'
+  images?: string[]  // base64 data URLs
 }
 
 export interface RecipeData {
@@ -22,11 +23,31 @@ export interface RecipeData {
   tags?: string[]        // 可选标签：['川菜', '快手菜']
 }
 
+export interface PlannedMeal {
+  name: string           // 菜名
+  brief?: string         // 一句话简述
+  ingredients?: Array<{  // 食材（供购物清单聚合）
+    name: string
+    amount: string
+    emoji?: string
+  }>
+}
+
+export interface MealPlanDay {
+  day: string            // 周一 / 周二 …
+  meals: PlannedMeal[]   // 当天的餐（午餐/晚餐等）
+}
+
+export interface MealPlan {
+  title?: string         // 计划标题，如"本周食谱"
+  days: MealPlanDay[]    // 一周计划
+}
+
 export interface Conversation {
   id: string
   title: string
   lastUpdated: number
   messages: Message[]
   pinned?: boolean
-  favoriteRecipes?: string[]  // 收藏的菜谱名称列表
+  favoriteRecipes?: RecipeData[]  // 收藏的完整菜谱数据（含食材，供购物清单聚合）
 }

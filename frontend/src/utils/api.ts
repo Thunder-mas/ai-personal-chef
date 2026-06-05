@@ -6,21 +6,40 @@ interface StreamChunk {
 }
 
 export async function* streamChat(
-  messages: Message[]
+  messages: Message[],
+  signal?: AbortSignal
 ): AsyncGenerator<string, void, unknown> {
   const response = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      messages: messages.map((m) => ({ role: m.role, content: m.content })),
+      messages: messages.map((m) => {
+        if (m.images && m.images.length > 0) {
+          const parts: Array<{ type: string; text?: string; image_url?: { url: string } }> = []
+          if (m.content) {
+            parts.push({ type: 'text', text: m.content })
+          }
+          for (const img of m.images) {
+            parts.push({ type: 'image_url', image_url: { url: img } })
+          }
+          return { role: m.role, content: parts }
+        }
+        return { role: m.role, content: m.content }
+      }),
     }),
+    signal,
   })
 
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}: ${response.statusText}`)
   }
 
-  const reader = response.body!.getReader()
+  const body = response.body
+  if (!body) {
+    throw new Error('Response body is null')
+  }
+
+  const reader = body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
 
@@ -34,13 +53,18 @@ export async function* streamChat(
 
     for (const line of lines) {
       if (line.startsWith('data: ')) {
-        const data: StreamChunk = JSON.parse(line.slice(6))
-        if (data.type === 'chunk' && data.content) {
-          yield data.content
-        } else if (data.type === 'error') {
-          throw new Error(data.content || 'Unknown error')
-        } else if (data.type === 'done') {
-          return
+        try {
+          const data: StreamChunk = JSON.parse(line.slice(6))
+          if (data.type === 'chunk' && data.content) {
+            yield data.content
+          } else if (data.type === 'error') {
+            throw new Error(data.content || 'Unknown error')
+          } else if (data.type === 'done') {
+            return
+          }
+        } catch (e) {
+          if (e instanceof SyntaxError) continue
+          throw e
         }
       }
     }

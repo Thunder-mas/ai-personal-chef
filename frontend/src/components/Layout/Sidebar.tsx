@@ -1,10 +1,16 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { isToday, isWithinInterval, subDays, startOfDay } from 'date-fns'
-import { PanelLeftClose, MoreHorizontal, Pencil, Trash2, Pin, Plus, Search } from 'lucide-react'
+import { PanelLeftClose, MoreHorizontal, Pencil, Trash2, Pin, Plus, Search, Heart, ShoppingCart, SlidersHorizontal } from 'lucide-react'
 import { useChatStore } from '../../store/useChatStore'
 import { useUIStore } from '../../store/useUIStore'
 import { ThemeToggle } from '../common/ThemeToggle'
 import type { Conversation } from '../../types/chat'
+
+interface FavoriteItem {
+  recipeName: string
+  conversationId: string
+  conversationTitle: string
+}
 
 interface GroupedConversations {
   label: string
@@ -43,28 +49,54 @@ function groupConversations(conversations: GroupedConversations['items']): Group
 export function Sidebar() {
   const sidebarOpen = useUIStore((s) => s.sidebarOpen)
   const setSidebarOpen = useUIStore((s) => s.setSidebarOpen)
-  const {
-    createNewChat,
-    switchConversation,
-    deleteConversation,
-    renameConversation,
-    togglePinConversation,
-    setSearchTerm,
-    currentConversationId,
-    filteredConversations,
-  } = useChatStore()
+  const viewFavorites = useUIStore((s) => s.viewFavorites)
+  const setViewFavorites = useUIStore((s) => s.setViewFavorites)
+  const openShoppingList = useUIStore((s) => s.openShoppingList)
+  const setPreferencesOpen = useUIStore((s) => s.setPreferencesOpen)
+  const createNewChat = useChatStore((s) => s.createNewChat)
+  const switchConversation = useChatStore((s) => s.switchConversation)
+  const deleteConversation = useChatStore((s) => s.deleteConversation)
+  const renameConversation = useChatStore((s) => s.renameConversation)
+  const togglePinConversation = useChatStore((s) => s.togglePinConversation)
+  const setSearchTerm = useChatStore((s) => s.setSearchTerm)
+  const currentConversationId = useChatStore((s) => s.currentConversationId)
+  const allConversations = useChatStore((s) => s.conversations)
+  const searchTerm = useChatStore((s) => s.searchTerm)
 
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const conversations = filteredConversations()
+  const conversations = useMemo(() => {
+    const term = searchTerm.toLowerCase()
+    const filtered = term
+      ? allConversations.filter((c) => c.title.toLowerCase().includes(term))
+      : allConversations
+    return [...filtered].sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1
+      if (!a.pinned && b.pinned) return 1
+      return b.lastUpdated - a.lastUpdated
+    })
+  }, [allConversations, searchTerm])
   const groupedConversations = useMemo(() => groupConversations(conversations), [conversations])
 
-  const handleNewChat = () => {
-    createNewChat()
-  }
+  // 收集所有对话中的收藏菜谱
+  const allFavorites = useMemo((): FavoriteItem[] => {
+    const items: FavoriteItem[] = []
+    for (const conv of allConversations) {
+      if (conv.favoriteRecipes && conv.favoriteRecipes.length > 0) {
+        for (const r of conv.favoriteRecipes) {
+          items.push({
+            recipeName: r.name,
+            conversationId: conv.id,
+            conversationTitle: conv.title,
+          })
+        }
+      }
+    }
+    return items
+  }, [allConversations])
 
   const handleSelect = (id: string) => {
     switchConversation(id)
@@ -73,7 +105,9 @@ export function Sidebar() {
 
   const handleDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    deleteConversation(id)
+    if (window.confirm('确定要删除这个对话吗？')) {
+      deleteConversation(id)
+    }
     setOpenMenuId(null)
   }
 
@@ -162,7 +196,7 @@ export function Sidebar() {
       {/* New Chat Button */}
       <div className="px-3 mb-2">
         <button
-          onClick={handleNewChat}
+          onClick={createNewChat}
           className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg transition-all"
           style={{
             backgroundColor: 'var(--bg-primary)',
@@ -189,10 +223,10 @@ export function Sidebar() {
         </button>
       </div>
 
-      {/* Search */}
-      <div className="px-3 mb-1">
+      {/* Search + Favorites Toggle */}
+      <div className="px-3 mb-1 flex gap-1.5">
         <div
-          className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg"
+          className="flex-1 flex items-center gap-2 px-2.5 py-1.5 rounded-lg"
           style={{
             backgroundColor: 'var(--bg-primary)',
             border: '1px solid var(--border-color)',
@@ -207,11 +241,84 @@ export function Sidebar() {
             style={{ color: 'var(--text-primary)' }}
           />
         </div>
+        <button
+          onClick={() => setViewFavorites(!viewFavorites)}
+          className="flex items-center justify-center w-8 rounded-lg transition-all shrink-0"
+          style={{
+            backgroundColor: viewFavorites ? 'var(--accent-alpha)' : 'var(--bg-primary)',
+            border: `1px solid ${viewFavorites ? 'var(--accent-red-border)' : 'var(--border-color)'}`,
+            color: viewFavorites ? 'var(--accent-red)' : 'var(--text-secondary)',
+          }}
+          title={viewFavorites ? '返回对话列表' : '我的收藏'}
+        >
+          <Heart size={14} fill={viewFavorites ? 'currentColor' : 'none'} />
+        </button>
       </div>
 
-      {/* Conversation List */}
+      {/* Conversation List or Favorites List */}
       <div className="flex-1 overflow-y-auto px-2 py-1">
-        {groupedConversations.map((group) => (
+        {viewFavorites ? (
+          /* Favorites View */
+          <>
+            {allFavorites.length === 0 ? (
+              <div className="px-2 py-8 text-center">
+                <Heart size={32} className="mx-auto mb-2" style={{ color: 'var(--text-secondary)', opacity: 0.4 }} />
+                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  还没有收藏的菜谱
+                </p>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)', opacity: 0.6 }}>
+                  在对话中点击菜谱卡片的"收藏菜谱"按钮
+                </p>
+              </div>
+            ) : (
+              <div className="mb-2">
+                <div className="px-2 py-1 text-xs flex items-center gap-1.5" style={{ color: 'var(--text-secondary)' }}>
+                  <Heart size={11} fill="currentColor" style={{ color: 'var(--accent-red)' }} />
+                  我的收藏 ({allFavorites.length})
+                </div>
+                <button
+                  onClick={() => openShoppingList()}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 mb-2 rounded-lg text-sm transition-all"
+                  style={{
+                    backgroundColor: 'var(--bg-primary)',
+                    border: '1px solid var(--border-color)',
+                    color: 'var(--text-primary)',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-color)'; e.currentTarget.style.color = 'var(--text-primary)' }}
+                >
+                  <ShoppingCart size={15} />
+                  生成购物清单
+                </button>
+                {allFavorites.map((fav) => (
+                  <button
+                    key={`${fav.conversationId}-${fav.recipeName}`}
+                    onClick={() => {
+                      switchConversation(fav.conversationId)
+                      setViewFavorites(false)
+                      setSidebarOpen(false)
+                    }}
+                    className="w-full text-left px-2 py-2 rounded-lg mb-1 transition-colors flex items-center gap-2"
+                    style={{ color: 'var(--text-primary)' }}
+                    onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-primary)' }}
+                    onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
+                  >
+                    <span className="text-base">🍳</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm truncate">{fav.recipeName}</div>
+                      <div className="text-xs truncate" style={{ color: 'var(--text-secondary)' }}>
+                        {fav.conversationTitle}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          /* Conversation List */
+          <>
+          {groupedConversations.map((group) => (
           <div key={group.label} className="mb-2">
             <div
               className="px-2 py-1 text-xs"
@@ -320,7 +427,7 @@ export function Sidebar() {
                       <button
                         onClick={(e) => handleDelete(conv.id, e)}
                         className="w-full flex items-center gap-2 px-2.5 py-1.5 text-sm transition-colors"
-                        style={{ color: '#ef4444' }}
+                        style={{ color: 'var(--accent-red)' }}
                         onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'var(--bg-primary)' }}
                         onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent' }}
                       >
@@ -333,17 +440,30 @@ export function Sidebar() {
               </div>
             ))}
           </div>
-        ))}
+          ))}
+          </>
+        )}
       </div>
 
       {/* Footer */}
       <div
-        className="px-3 py-2 flex items-center justify-between"
+        className="px-3 py-2 flex items-center gap-2"
         style={{ borderTop: '1px solid var(--border-color)' }}
       >
         <ThemeToggle />
+        <button
+          onClick={() => setPreferencesOpen(true)}
+          className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-sm transition-colors"
+          style={{ color: 'var(--text-secondary)' }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-secondary)' }}
+          title="口味偏好"
+        >
+          <SlidersHorizontal size={16} />
+          口味偏好
+        </button>
         <div
-          className="w-7 h-7 rounded-full flex items-center justify-center text-xs"
+          className="ml-auto w-7 h-7 rounded-full flex items-center justify-center text-xs"
           style={{ backgroundColor: 'var(--accent)', color: '#fff' }}
         >
           U

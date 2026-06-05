@@ -15,9 +15,10 @@
   --bubble-ai: #ffffff;
   --border-color: #e5e7eb;
   --accent: #4f6ef7;
+  --accent-red: #ef4444;
+  --accent-alpha: rgba(239,68,68,0.1);
+  --accent-red-border: rgba(239,68,68,0.3);
   --shadow: 0 2px 12px rgba(0,0,0,0.04);
-  --radius-xl: 16px;
-  --radius-lg: 12px;
   --radius-md: 8px;
   --radius-sm: 4px;
 }
@@ -32,12 +33,19 @@
   --bubble-ai: transparent;
   --border-color: #3f3f5a;
   --accent: #7b8cff;
+  --accent-red: #f87171;
+  --accent-alpha: rgba(248,113,113,0.15);
+  --accent-red-border: rgba(248,113,113,0.3);
   --shadow: 0 2px 12px rgba(0,0,0,0.15);
 }
 
-* {
-  margin: 0;
-  box-sizing: border-box;
+/* 放进 @layer base，否则无 layer 的 * 规则会盖过 Tailwind 的 margin 工具类
+   （mx-auto / mb-* / ml-auto 等），导致 logo、居中布局等全部失效 */
+@layer base {
+  * {
+    margin: 0;
+    box-sizing: border-box;
+  }
 }
 
 body {
@@ -114,4 +122,13 @@ body {
 }
 .animate-slide-up {
   animation: slideUp 0.2s ease-out;
+}
+
+/* Typing indicator bounce */
+@keyframes bounce {
+  0%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-6px); }
+}
+.typing-dot {
+  animation: bounce 1.4s ease-in-out infinite;
 }

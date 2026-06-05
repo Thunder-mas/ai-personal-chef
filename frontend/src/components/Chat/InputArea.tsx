@@ -51,11 +51,23 @@ export function InputArea() {
     })
   }
 
+  const fileToBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(reader.result as string)
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+
   const handleSend = async () => {
     const trimmed = input.trim()
     if ((!trimmed && images.length === 0) || isStreaming) return
-    await sendMessage(trimmed)
+
+    const base64Images = await Promise.all(images.map((img) => fileToBase64(img.file)))
+
+    await sendMessage(trimmed, base64Images.length > 0 ? base64Images : undefined)
     setInput('')
+    images.forEach((img) => URL.revokeObjectURL(img.preview))
     setImages([])
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
@@ -71,34 +83,30 @@ export function InputArea() {
 
   return (
     <div className="pb-4 pt-2">
-      <div className="max-w-2xl mx-auto">
-        <div
-          className="rounded-2xl border px-4 pt-3 pb-2"
-          style={{
-            borderColor: 'var(--border-color)',
-            backgroundColor: 'var(--bg-secondary)',
-          }}
-        >
-          {images.length > 0 && (
-            <div className="flex gap-2 pb-3 flex-wrap">
-              {images.map((img, index) => (
-                <div key={index} className="relative group">
-                  <img
-                    src={img.preview}
-                    alt="上传图片"
-                    className="w-20 h-20 object-cover rounded-lg"
-                  />
-                  <button
-                    onClick={() => removeImage(index)}
-                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    style={{ backgroundColor: 'var(--accent)', color: '#fff' }}
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+      <div
+        className="max-w-2xl mx-auto rounded-2xl px-4 py-3"
+        style={{ backgroundColor: 'var(--bg-secondary)' }}
+      >
+        {images.length > 0 && (
+          <div className="flex gap-2 pb-3 flex-wrap">
+            {images.map((img, index) => (
+              <div key={index} className="relative group">
+                <img
+                  src={img.preview}
+                  alt="上传图片"
+                  className="w-20 h-20 object-cover rounded-lg"
+                />
+                <button
+                  onClick={() => removeImage(index)}
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  style={{ backgroundColor: 'var(--accent)', color: '#fff' }}
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         <textarea
           ref={textareaRef}
@@ -159,6 +167,5 @@ export function InputArea() {
         </div>
       </div>
     </div>
-  </div>
   )
 }

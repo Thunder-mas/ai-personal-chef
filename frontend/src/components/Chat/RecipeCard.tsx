@@ -7,18 +7,20 @@ interface RecipeCardProps {
 }
 
 export function RecipeCard({ recipe }: RecipeCardProps) {
-  const { conversations, currentConversationId, toggleFavoriteRecipe } = useChatStore()
+  const conversations = useChatStore((s) => s.conversations)
+  const currentConversationId = useChatStore((s) => s.currentConversationId)
+  const toggleFavoriteRecipe = useChatStore((s) => s.toggleFavoriteRecipe)
   const currentConv = conversations.find(c => c.id === currentConversationId)
-  const isFavorite = currentConv?.favoriteRecipes?.includes(recipe.name) ?? false
+  const isFavorite = currentConv?.favoriteRecipes?.some((r) => r.name === recipe.name) ?? false
 
   const difficultyColor = {
-    '简单': 'text-green-500',
-    '中等': 'text-yellow-500',
-    '复杂': 'text-red-500'
+    '简单': 'text-green-600 dark:text-green-400',
+    '中等': 'text-yellow-600 dark:text-yellow-400',
+    '复杂': 'text-red-600 dark:text-red-400'
   }
 
   const handleFavorite = () => {
-    toggleFavoriteRecipe(recipe.name)
+    toggleFavoriteRecipe(recipe)
   }
 
   return (
@@ -31,23 +33,12 @@ export function RecipeCard({ recipe }: RecipeCardProps) {
     >
       {/* 头部：菜名和描述 */}
       <div className="px-5 pt-5 pb-3">
-        <div className="flex items-start justify-between">
-          <div>
-            <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
-              🍳 {recipe.name}
-            </h3>
-            <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
-              {recipe.description}
-            </p>
-          </div>
-          <button
-            onClick={handleFavorite}
-            className="p-2 rounded-full transition-colors"
-            style={{ color: isFavorite ? '#ef4444' : 'var(--text-secondary)' }}
-          >
-            <Heart size={20} fill={isFavorite ? 'currentColor' : 'none'} />
-          </button>
-        </div>
+        <h3 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>
+          🍳 {recipe.name}
+        </h3>
+        <p className="text-sm mt-1" style={{ color: 'var(--text-secondary)' }}>
+          {recipe.description}
+        </p>
       </div>
 
       {/* 信息栏：难度、时间、人数 */}
@@ -146,6 +137,22 @@ export function RecipeCard({ recipe }: RecipeCardProps) {
           </p>
         </div>
       )}
+
+      {/* 收藏按钮 */}
+      <div className="px-5 py-3" style={{ borderTop: '1px solid var(--border-color)' }}>
+        <button
+          onClick={handleFavorite}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all"
+          style={{
+            backgroundColor: isFavorite ? 'var(--accent-alpha, rgba(239,68,68,0.1))' : 'var(--bg-primary)',
+            color: isFavorite ? 'var(--accent-red, #ef4444)' : 'var(--text-secondary)',
+            border: `1px solid ${isFavorite ? 'var(--accent-red-border, rgba(239,68,68,0.3))' : 'var(--border-color)'}`,
+          }}
+        >
+          <Heart size={16} fill={isFavorite ? 'currentColor' : 'none'} />
+          {isFavorite ? '已收藏' : '收藏菜谱'}
+        </button>
+      </div>
     </div>
   )
 }

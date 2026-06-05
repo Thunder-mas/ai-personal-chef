@@ -2,6 +2,8 @@ import { useEffect } from 'react'
 import { PanelLeft, Search, Plus } from 'lucide-react'
 import { Sidebar } from './components/Layout/Sidebar'
 import { MainArea } from './components/Layout/MainArea'
+import { ShoppingListModal } from './components/ShoppingList/ShoppingListModal'
+import { PreferencesModal } from './components/Preferences/PreferencesModal'
 import { useChatStore } from './store/useChatStore'
 import { useUIStore } from './store/useUIStore'
 
@@ -9,8 +11,13 @@ function App() {
   const sidebarOpen = useUIStore((s) => s.sidebarOpen)
   const toggleSidebar = useUIStore((s) => s.toggleSidebar)
   const setSidebarOpen = useUIStore((s) => s.setSidebarOpen)
-  const { darkMode, createNewChat, currentConversation } = useChatStore()
-  const currentConv = currentConversation()
+  const shoppingListOpen = useUIStore((s) => s.shoppingListOpen)
+  const preferencesOpen = useUIStore((s) => s.preferencesOpen)
+  const darkMode = useChatStore((s) => s.darkMode)
+  const createNewChat = useChatStore((s) => s.createNewChat)
+  const conversations = useChatStore((s) => s.conversations)
+  const currentConversationId = useChatStore((s) => s.currentConversationId)
+  const currentConv = conversations.find((c) => c.id === currentConversationId)
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode)
@@ -108,6 +115,9 @@ function App() {
 
         <MainArea />
       </div>
+
+      {shoppingListOpen && <ShoppingListModal />}
+      {preferencesOpen && <PreferencesModal />}
     </div>
   )
 }

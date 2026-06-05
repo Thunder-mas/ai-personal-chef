@@ -9,7 +9,7 @@ interface RecipeCardProps {
 
 export function RecipeCard({ recipe }: RecipeCardProps) {
   const [isFavorite, setIsFavorite] = useState(false)
-  const { currentConversation, toggleFavoriteRecipe } = useChatStore()
+  const { toggleFavoriteRecipe } = useChatStore()
 
   const difficultyColor = {
     '简单': 'text-green-500',
@@ -19,7 +19,7 @@ export function RecipeCard({ recipe }: RecipeCardProps) {
 
   const handleFavorite = () => {
     setIsFavorite(!isFavorite)
-    toggleFavoriteRecipe(recipe.name)
+    toggleFavoriteRecipe?.(recipe.name)
   }
 
   return (

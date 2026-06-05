@@ -23,6 +23,7 @@ interface ChatState {
   deleteConversation: (id: string) => void
   renameConversation: (id: string, title: string) => void
   togglePinConversation: (id: string) => void
+  toggleFavoriteRecipe: (recipeName: string) => void
   setSearchTerm: (term: string) => void
   toggleDarkMode: () => void
   sendMessage: (content: string) => Promise<void>
@@ -48,6 +49,7 @@ export const useChatStore = create<ChatState>()(
           title: '新对话',
           lastUpdated: Date.now(),
           messages: [],
+          favoriteRecipes: [],
         }
         set((state) => ({
           conversations: [newConv, ...state.conversations],
@@ -86,6 +88,26 @@ export const useChatStore = create<ChatState>()(
           conversations: state.conversations.map((c) =>
             c.id === id ? { ...c, pinned: !c.pinned } : c
           ),
+        }))
+      },
+
+      toggleFavoriteRecipe: (recipeName) => {
+        const state = get()
+        const convId = state.currentConversationId
+        if (!convId) return
+
+        set((state) => ({
+          conversations: state.conversations.map((c) => {
+            if (c.id !== convId) return c
+            const favorites = c.favoriteRecipes || []
+            const isFavorited = favorites.includes(recipeName)
+            return {
+              ...c,
+              favoriteRecipes: isFavorited
+                ? favorites.filter((name) => name !== recipeName)
+                : [...favorites, recipeName],
+            }
+          }),
         }))
       },
 

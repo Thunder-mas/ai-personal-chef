@@ -10,7 +10,7 @@ export function MainArea() {
       className="flex-1 flex flex-col min-w-0 h-full overflow-hidden"
       style={{
         backgroundColor: 'var(--bg-primary)',
-        paddingLeft: sidebarOpen ? '160px' : '360px',
+        paddingLeft: sidebarOpen ? '200px' : '400px',
         paddingRight: '14px',
       }}
     >

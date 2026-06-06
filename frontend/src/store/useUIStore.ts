@@ -8,6 +8,7 @@ interface UIState {
   shoppingListSource: RecipeData[] | null // null = 用收藏；非 null = 用这批菜谱（如周计划）
   preferencesOpen: boolean
   fitnessOpen: boolean
+  foodLogOpen: boolean
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
   setViewFavorites: (v: boolean) => void
@@ -15,6 +16,7 @@ interface UIState {
   closeShoppingList: () => void
   setPreferencesOpen: (open: boolean) => void
   setFitnessOpen: (open: boolean) => void
+  setFoodLogOpen: (open: boolean) => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -24,6 +26,7 @@ export const useUIStore = create<UIState>((set) => ({
   shoppingListSource: null,
   preferencesOpen: false,
   fitnessOpen: false,
+  foodLogOpen: false,
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   setViewFavorites: (v) => set({ viewFavorites: v }),
@@ -31,4 +34,5 @@ export const useUIStore = create<UIState>((set) => ({
   closeShoppingList: () => set({ shoppingListOpen: false, shoppingListSource: null }),
   setPreferencesOpen: (open) => set({ preferencesOpen: open }),
   setFitnessOpen: (open) => set({ fitnessOpen: open }),
+  setFoodLogOpen: (open) => set({ foodLogOpen: open }),
 }))

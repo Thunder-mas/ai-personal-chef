@@ -8,13 +8,15 @@ interface StreamChunk {
 export async function* streamChat(
   messages: Message[],
   signal?: AbortSignal,
-  threadId?: string
+  threadId?: string,
+  mode?: string
 ): AsyncGenerator<string, void, unknown> {
   const response = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       thread_id: threadId, // 对话记忆线程：同一对话固定 id，后端按它记住历史
+      mode,                // 该对话所属模式（每对话独立）
       messages: messages.map((m) => {
         if (m.images && m.images.length > 0) {
           const parts: Array<{ type: string; text?: string; image_url?: { url: string } }> = []

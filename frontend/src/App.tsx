@@ -5,6 +5,7 @@ import { MainArea } from './components/Layout/MainArea'
 import { ShoppingListModal } from './components/ShoppingList/ShoppingListModal'
 import { PreferencesModal } from './components/Preferences/PreferencesModal'
 import { FitnessModal } from './components/Fitness/FitnessModal'
+import { FoodLogModal } from './components/FoodLog/FoodLogModal'
 import { useChatStore } from './store/useChatStore'
 import { useUIStore } from './store/useUIStore'
 
@@ -15,6 +16,7 @@ function App() {
   const shoppingListOpen = useUIStore((s) => s.shoppingListOpen)
   const preferencesOpen = useUIStore((s) => s.preferencesOpen)
   const fitnessOpen = useUIStore((s) => s.fitnessOpen)
+  const foodLogOpen = useUIStore((s) => s.foodLogOpen)
   const darkMode = useChatStore((s) => s.darkMode)
   const createNewChat = useChatStore((s) => s.createNewChat)
   const conversations = useChatStore((s) => s.conversations)
@@ -99,7 +101,7 @@ function App() {
               <Search size={18} />
             </button>
             <button
-              onClick={createNewChat}
+              onClick={() => createNewChat()}
               className="p-1.5 rounded-lg transition-colors"
               style={{ color: 'var(--text-secondary)' }}
               onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent)' }}
@@ -121,6 +123,7 @@ function App() {
       {shoppingListOpen && <ShoppingListModal />}
       {preferencesOpen && <PreferencesModal />}
       {fitnessOpen && <FitnessModal />}
+      {foodLogOpen && <FoodLogModal />}
     </div>
   )
 }

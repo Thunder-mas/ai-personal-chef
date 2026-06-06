@@ -57,4 +57,5 @@ export interface Conversation {
   messages: Message[]
   pinned?: boolean
   favoriteRecipes?: RecipeData[]  // 收藏的完整菜谱数据（含食材，供购物清单聚合）
+  mode?: string                   // 该对话所属模式（美食/健身），切模式=开新对话
 }

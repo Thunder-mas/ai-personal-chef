@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { isToday, isWithinInterval, subDays, startOfDay } from 'date-fns'
-import { PanelLeftClose, MoreHorizontal, Pencil, Trash2, Pin, Plus, Search, Heart, ShoppingCart, SlidersHorizontal, Dumbbell } from 'lucide-react'
+import { PanelLeftClose, MoreHorizontal, Pencil, Trash2, Pin, Plus, Search, Heart, ShoppingCart, SlidersHorizontal, Dumbbell, Activity } from 'lucide-react'
 import { useChatStore } from '../../store/useChatStore'
 import { useUIStore } from '../../store/useUIStore'
 import { ThemeToggle } from '../common/ThemeToggle'
@@ -54,6 +54,7 @@ export function Sidebar() {
   const openShoppingList = useUIStore((s) => s.openShoppingList)
   const setPreferencesOpen = useUIStore((s) => s.setPreferencesOpen)
   const setFitnessOpen = useUIStore((s) => s.setFitnessOpen)
+  const setFoodLogOpen = useUIStore((s) => s.setFoodLogOpen)
   const createNewChat = useChatStore((s) => s.createNewChat)
   const switchConversation = useChatStore((s) => s.switchConversation)
   const deleteConversation = useChatStore((s) => s.deleteConversation)
@@ -197,7 +198,7 @@ export function Sidebar() {
       {/* New Chat Button */}
       <div className="px-3 mb-2">
         <button
-          onClick={createNewChat}
+          onClick={() => createNewChat()}
           className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg transition-all"
           style={{
             backgroundColor: 'var(--bg-primary)',
@@ -472,6 +473,16 @@ export function Sidebar() {
           title="健身档案"
         >
           <Dumbbell size={16} />
+        </button>
+        <button
+          onClick={() => setFoodLogOpen(true)}
+          className="flex items-center justify-center p-1.5 rounded-lg transition-colors"
+          style={{ color: 'var(--text-secondary)' }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-secondary)' }}
+          title="今日进度"
+        >
+          <Activity size={16} />
         </button>
         <div
           className="ml-auto w-7 h-7 rounded-full flex items-center justify-center text-xs"

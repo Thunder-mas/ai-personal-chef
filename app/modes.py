@@ -84,8 +84,8 @@ def set_mode(mode: str) -> None:
 
 
 def get_mode_config(mode: Optional[str] = None) -> Dict[str, Any]:
-    """取某个模式的完整配置（默认取当前模式）。"""
-    return MODES[mode or get_mode()]
+    """取某个模式的完整配置（传了就用传的，非法/为空回退到全局当前模式）。"""
+    return MODES.get(mode) or MODES[get_mode()]
 
 
 def list_modes() -> List[Dict[str, str]]:

@@ -14,6 +14,7 @@ from app.agents.ai_chef import chat_stream
 from app.preferences import get_preferences, add_preference, remove_preference
 from app.fitness import get_profile, save_profile, get_daily_targets
 from app.modes import get_mode, set_mode, list_modes
+from app.food_log import get_day_summary, add_entry, delete_entry
 
 app = FastAPI(title="AI Personal Chef API")
 
@@ -34,6 +35,7 @@ class Message(BaseModel):
 class ChatRequest(BaseModel):
     messages: List[Message]
     thread_id: Optional[str] = None  # 对话记忆线程：同一对话用同一个 id，后端按它记住历史
+    mode: Optional[str] = None       # 该对话所属模式(每对话独立)，不传则用全局
 
 
 class PreferenceRequest(BaseModel):
@@ -54,13 +56,22 @@ class ModeRequest(BaseModel):
     mode: str            # gourmet / fitness / ...
 
 
+class FoodEntryRequest(BaseModel):
+    name: str
+    calories: float = 0
+    protein: float = 0
+    carbs: float = 0
+    fat: float = 0
+    date: Optional[str] = None  # 默认今天
+
+
 @app.post("/api/chat")
 async def chat(request: ChatRequest):
     messages = [msg.model_dump() for msg in request.messages]
 
     def event_stream():
         try:
-            for chunk in chat_stream(messages, thread_id=request.thread_id):
+            for chunk in chat_stream(messages, thread_id=request.thread_id, mode=request.mode):
                 yield f"data: {json.dumps({'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
         except Exception as e:
@@ -107,6 +118,23 @@ async def read_mode():
 async def update_mode(req: ModeRequest):
     set_mode(req.mode)
     return {"mode": get_mode(), "modes": list_modes()}
+
+
+@app.get("/api/food-log")
+async def read_food_log(date: Optional[str] = None):
+    return get_day_summary(date)
+
+
+@app.post("/api/food-log")
+async def create_food_entry(req: FoodEntryRequest):
+    add_entry(req.name, req.calories, req.protein, req.carbs, req.fat, req.date)
+    return get_day_summary(req.date)
+
+
+@app.delete("/api/food-log/{entry_id}")
+async def remove_food_entry(entry_id: int):
+    delete_entry(entry_id)
+    return get_day_summary()
 
 
 @app.get("/api/health")

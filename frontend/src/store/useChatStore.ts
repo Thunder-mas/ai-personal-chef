@@ -19,7 +19,8 @@ interface ChatState {
   isStreaming: boolean
   abortController: AbortController | null
 
-  createNewChat: () => void
+  createNewChat: (mode?: string) => void
+  switchMode: (mode: string) => void
   switchConversation: (id: string) => void
   deleteConversation: (id: string) => void
   renameConversation: (id: string, title: string) => void
@@ -44,7 +45,11 @@ export const useChatStore = create<ChatState>()(
       isStreaming: false,
       abortController: null,
 
-      createNewChat: () => {
+      createNewChat: (mode?: string) => {
+        const state = get()
+        const current = state.conversations.find((c) => c.id === state.currentConversationId)
+        // 没指定就继承当前对话的模式，再退到默认 gourmet
+        const newMode = mode ?? current?.mode ?? 'gourmet'
         const id = uuid()
         const newConv: Conversation = {
           id,
@@ -52,11 +57,27 @@ export const useChatStore = create<ChatState>()(
           lastUpdated: Date.now(),
           messages: [],
           favoriteRecipes: [],
+          mode: newMode,
         }
         set((state) => ({
           conversations: [newConv, ...state.conversations],
           currentConversationId: id,
         }))
+      },
+
+      // 切模式 = 开该模式的新对话；当前对话若为空则原地改模式，避免堆空对话
+      switchMode: (mode) => {
+        const state = get()
+        const current = state.conversations.find((c) => c.id === state.currentConversationId)
+        if (current && current.messages.length === 0) {
+          set((s) => ({
+            conversations: s.conversations.map((c) =>
+              c.id === current.id ? { ...c, mode } : c
+            ),
+          }))
+        } else {
+          get().createNewChat(mode)
+        }
       },
 
       switchConversation: (id) => {
@@ -175,8 +196,9 @@ export const useChatStore = create<ChatState>()(
             ?.messages.filter((m) => m.id !== assistantMsg.id) ?? []
 
           let accumulated = ''
-          // convId 作为 thread_id：后端按它持久化记忆，老对话首次会用全量历史播种
-          for await (const chunk of streamChat(currentMessages, controller.signal, convId ?? undefined)) {
+          // convId 作为 thread_id；convMode 作为该对话的模式（每对话独立）
+          const convMode = get().conversations.find((c) => c.id === convId)?.mode
+          for await (const chunk of streamChat(currentMessages, controller.signal, convId ?? undefined, convMode)) {
             accumulated += chunk
             set((state) => ({
               conversations: state.conversations.map((c) =>

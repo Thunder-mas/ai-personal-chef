@@ -132,8 +132,8 @@ model = ChatOpenAI(
 ).bind_tools(tools)
 
 # ==================== 5. 定义 Nodes ====================
-def _build_system_prompt() -> str:
-    """按 当前模式 + 用户偏好 +（健身模式下）每日宏量目标，动态拼系统提示。"""
+def _build_system_prompt(mode: str = None) -> str:
+    """按 指定模式(默认全局) + 用户偏好 +（健身模式下）每日宏量目标，动态拼系统提示。"""
     prompt = system_prompt
 
     # 偏好：所有模式都遵守
@@ -146,8 +146,8 @@ def _build_system_prompt() -> str:
             + "\n推荐菜谱时务必避开以上忌口/过敏项，并尽量贴合口味偏好。"
         )
 
-    # 当前模式的人设/行为
-    mode_cfg = get_mode_config()
+    # 模式的人设/行为（按传入模式，没传则全局当前模式）
+    mode_cfg = get_mode_config(mode)
     prompt += "\n\n" + mode_cfg["prompt"]
 
     # 仅健身类模式且已设档案 → 注入具体的每日营养计划
@@ -175,10 +175,11 @@ def _build_system_prompt() -> str:
 
     return prompt
 
-def agent_node(state: AgentState):
-    """AI 模型思考并决定是否调用工具"""
+def agent_node(state: AgentState, config=None):
+    """AI 模型思考并决定是否调用工具。模式从 config.configurable.mode 取(每对话独立)。"""
     messages = state["messages"]
-    system_message = SystemMessage(content=_build_system_prompt())
+    mode = ((config or {}).get("configurable") or {}).get("mode")
+    system_message = SystemMessage(content=_build_system_prompt(mode))
     response = model.invoke([system_message] + messages)
 
     # 调试信息
@@ -287,7 +288,7 @@ def _thread_has_history(thread_id: str) -> bool:
         return False
 
 
-def chat_stream(messages, thread_id=None):
+def chat_stream(messages, thread_id=None, mode=None):
     """流式聊天 - 使用 LangGraph + checkpointer 记忆。
 
     - 传 thread_id：对话历史由 SqliteSaver 持久化在后端。
@@ -298,7 +299,8 @@ def chat_stream(messages, thread_id=None):
     # graph 已挂 checkpointer，调用必须带 thread_id，否则会报错；没有就给个一次性的。
     if not thread_id:
         thread_id = f"ephemeral-{uuid.uuid4()}"
-    config = {"configurable": {"thread_id": thread_id}}
+    # mode 放进 config，agent_node 据此按"每对话独立模式"构建系统提示
+    config = {"configurable": {"thread_id": thread_id, "mode": mode}}
 
     # 视觉前置：最新用户消息若带图片，先用多模态模型识别食材，
     # 再把这条消息改写成纯文本喂给 agent（agent 用 mimo-v2.5，不处理图片）。

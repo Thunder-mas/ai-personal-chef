@@ -1,6 +1,8 @@
-import { Heart, Clock, Users, ChefHat } from 'lucide-react'
+import { useState } from 'react'
+import { Heart, Clock, Users, ChefHat, Plus } from 'lucide-react'
 import type { RecipeData } from '../../types/chat'
 import { useChatStore } from '../../store/useChatStore'
+import { addFoodEntry } from '../../utils/foodLog'
 
 interface RecipeCardProps {
   recipe: RecipeData
@@ -21,6 +23,24 @@ export function RecipeCard({ recipe }: RecipeCardProps) {
 
   const handleFavorite = () => {
     toggleFavoriteRecipe(recipe)
+  }
+
+  const [logged, setLogged] = useState(false)
+  const handleLog = async () => {
+    if (!recipe.nutrition) return
+    try {
+      await addFoodEntry({
+        name: recipe.name,
+        calories: recipe.nutrition.calories,
+        protein: recipe.nutrition.protein,
+        carbs: recipe.nutrition.carbs,
+        fat: recipe.nutrition.fat,
+      })
+      setLogged(true)
+      setTimeout(() => setLogged(false), 2000)
+    } catch {
+      /* 静默失败 */
+    }
   }
 
   return (
@@ -174,8 +194,8 @@ export function RecipeCard({ recipe }: RecipeCardProps) {
         </div>
       )}
 
-      {/* 收藏按钮 */}
-      <div className="px-5 py-3" style={{ borderTop: '1px solid var(--border-color)' }}>
+      {/* 操作区：收藏 + (有营养时)记录到今日 */}
+      <div className="px-5 py-3 flex gap-2" style={{ borderTop: '1px solid var(--border-color)' }}>
         <button
           onClick={handleFavorite}
           className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all"
@@ -188,6 +208,20 @@ export function RecipeCard({ recipe }: RecipeCardProps) {
           <Heart size={16} fill={isFavorite ? 'currentColor' : 'none'} />
           {isFavorite ? '已收藏' : '收藏菜谱'}
         </button>
+        {recipe.nutrition && (
+          <button
+            onClick={handleLog}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all"
+            style={{
+              backgroundColor: logged ? 'var(--accent)' : 'var(--bg-primary)',
+              color: logged ? '#fff' : 'var(--text-secondary)',
+              border: '1px solid var(--border-color)',
+            }}
+          >
+            <Plus size={16} />
+            {logged ? '已记录 ✓' : '记录这道菜'}
+          </button>
+        )}
       </div>
     </div>
   )

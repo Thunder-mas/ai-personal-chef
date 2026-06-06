@@ -47,6 +47,7 @@ class FitnessProfileRequest(BaseModel):
     weight_kg: float
     activity_level: str  # 久坐/轻度/中度/高度/极高
     goal: str            # 减脂/维持/增肌
+    target_weight_kg: Optional[float] = None  # 目标体重（减脂/增肌用于算周期）
 
 
 class ModeRequest(BaseModel):
@@ -93,7 +94,7 @@ async def fitness_profile():
 @app.post("/api/fitness/profile")
 async def update_fitness_profile(req: FitnessProfileRequest):
     save_profile(req.gender, req.age, req.height_cm, req.weight_kg,
-                 req.activity_level, req.goal)
+                 req.activity_level, req.goal, req.target_weight_kg)
     return {"profile": get_profile(), "targets": get_daily_targets()}
 
 

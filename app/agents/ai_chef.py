@@ -58,12 +58,13 @@ system_prompt = """你是私人厨师。根据用户食材推荐菜谱。
 当用户要求"规划一周食谱/每周菜单/安排一周吃什么"等，用以下格式返回（前端渲染为周计划卡片）：
 
 ```mealplan
-{"title":"本周食谱","days":[{"day":"周一","meals":[{"name":"菜名","brief":"一句话简述","ingredients":[{"name":"食材","amount":"用量","emoji":"图标"}]}]}]}
+{"title":"本周食谱","days":[{"day":"周一","meals":[{"slot":"早餐","name":"菜名","brief":"一句话简述","ingredients":[{"name":"食材","amount":"用量","emoji":"图标"}]},{"slot":"午餐","name":"菜名","brief":"简述","ingredients":[...]},{"slot":"晚餐","name":"菜名","brief":"简述","ingredients":[...]}]}]}
 ```
 
 规则：
 - days 必须是完整的7天（周一到周日）
-- 每天1-2道菜，每道菜都要带 ingredients（食材名+用量），方便生成购物清单
+- 每天必须包含早餐、午餐、晚餐三餐，每餐的 slot 字段只能是"早餐""午餐""晚餐"
+- 每餐都要带 ingredients（食材名+用量），方便生成购物清单
 - 食材精简，整体必须是合法的单行JSON
 
 ## 偏好记忆
@@ -149,15 +150,27 @@ def _build_system_prompt() -> str:
     mode_cfg = get_mode_config()
     prompt += "\n\n" + mode_cfg["prompt"]
 
-    # 仅健身类模式且已设档案 → 注入具体的每日宏量目标
+    # 仅健身类模式且已设档案 → 注入具体的每日营养计划
     if mode_cfg.get("uses_fitness"):
         targets = get_daily_targets()
         if targets:
+            plan = f"维持热量约 {targets['maintenance']} kcal"
+            if targets["daily_adjust"] != 0:
+                kind = "缺口" if targets["daily_adjust"] < 0 else "盈余"
+                plan += f"，每日{kind} {abs(targets['daily_adjust'])} kcal"
+            plan += f"，目标 {targets['calories']} kcal/天"
+            if targets.get("weeks_to_goal") and targets.get("target_weight"):
+                plan += (
+                    f"；按每周约 {targets['weekly_rate_kg']}kg 的健康速度，"
+                    f"预计 {targets['weeks_to_goal']} 周达 {targets['target_weight']}kg"
+                )
             prompt += (
                 "\n\n## 每日营养目标（必须贴合）\n"
-                f"- 目标：{targets['goal']}\n"
-                f"- 热量 {targets['calories']} kcal、蛋白质 {targets['protein']}g、"
-                f"碳水 {targets['carbs']}g、脂肪 {targets['fat']}g"
+                f"- 目标：{targets['goal']}（{plan}）\n"
+                f"- 每日：热量 {targets['calories']} kcal、蛋白质 {targets['protein']}g、"
+                f"碳水 {targets['carbs']}g、脂肪 {targets['fat']}g\n"
+                "- 推荐时贴合以上热量与蛋白，并简要说明这道菜如何契合该计划；"
+                "菜谱的 nutrition 营养值要按实际食材与份量合理估算，不要瞎写。"
             )
 
     return prompt

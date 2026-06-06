@@ -30,6 +30,7 @@ export interface RecipeData {
 }
 
 export interface PlannedMeal {
+  slot?: string          // 餐次：早餐 / 午餐 / 晚餐
   name: string           // 菜名
   brief?: string         // 一句话简述
   ingredients?: Array<{  // 食材（供购物清单聚合）

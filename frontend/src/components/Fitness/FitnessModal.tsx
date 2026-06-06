@@ -14,6 +14,7 @@ export function FitnessModal() {
   const [age, setAge] = useState('25')
   const [height, setHeight] = useState('175')
   const [weight, setWeight] = useState('70')
+  const [targetWeight, setTargetWeight] = useState('')
   const [activity, setActivity] = useState('中度')
   const [goal, setGoal] = useState('增肌')
 
@@ -32,6 +33,7 @@ export function FitnessModal() {
           setAge(String(profile.age))
           setHeight(String(profile.height_cm))
           setWeight(String(profile.weight_kg))
+          setTargetWeight(profile.target_weight_kg != null ? String(profile.target_weight_kg) : '')
           setActivity(profile.activity_level)
           setGoal(profile.goal)
         }
@@ -52,6 +54,7 @@ export function FitnessModal() {
         age: Number(age),
         height_cm: Number(height),
         weight_kg: Number(weight),
+        target_weight_kg: targetWeight ? Number(targetWeight) : null,
         activity_level: activity,
         goal,
       })
@@ -107,11 +110,12 @@ export function FitnessModal() {
                 <Segmented options={GOALS} value={goal} onChange={setGoal} />
               </Field>
 
-              {/* 年龄 / 身高 / 体重 */}
-              <div className="grid grid-cols-3 gap-2">
+              {/* 年龄 / 身高 / 当前体重 / 目标体重 */}
+              <div className="grid grid-cols-2 gap-2">
                 <NumField label="年龄" value={age} onChange={setAge} unit="岁" />
                 <NumField label="身高" value={height} onChange={setHeight} unit="cm" />
-                <NumField label="体重" value={weight} onChange={setWeight} unit="kg" />
+                <NumField label="当前体重" value={weight} onChange={setWeight} unit="kg" />
+                <NumField label="目标体重" value={targetWeight} onChange={setTargetWeight} unit="kg" />
               </div>
 
               {/* 活动量 */}
@@ -136,6 +140,24 @@ export function FitnessModal() {
                   <div className="text-xs mb-2" style={{ color: 'var(--text-secondary)' }}>
                     🎯 {targets.goal} · 每日营养目标
                   </div>
+
+                  {/* 计划摘要（依据：能量平衡 + 安全速率） */}
+                  <div className="text-xs mb-3 leading-relaxed" style={{ color: 'var(--text-primary)' }}>
+                    维持热量约 <b>{targets.maintenance}</b> kcal/天
+                    {targets.daily_adjust !== 0 && (
+                      <>，每日{targets.daily_adjust < 0 ? '缺口' : '盈余'}{' '}
+                        <b>{Math.abs(targets.daily_adjust)}</b> kcal</>
+                    )}
+                    ，目标 <b>{targets.calories}</b> kcal/天。
+                    {targets.weekly_rate_kg > 0 && targets.weeks_to_goal && (
+                      <>
+                        <br />
+                        按每周约 <b>{targets.weekly_rate_kg}</b> kg 的健康速度，预计{' '}
+                        <b>{targets.weeks_to_goal}</b> 周达到 {targets.target_weight} kg。
+                      </>
+                    )}
+                  </div>
+
                   <div className="flex gap-2">
                     {[
                       { label: '热量', value: targets.calories, unit: 'kcal', emoji: '🔥' },
@@ -151,6 +173,10 @@ export function FitnessModal() {
                       </div>
                     ))}
                   </div>
+
+                  <p className="text-[10px] mt-2 leading-snug" style={{ color: 'var(--text-secondary)' }}>
+                    * 基于 Mifflin-St Jeor 公式与能量平衡（约 7700 kcal/kg）估算，安全速率每周不超过约 1% 体重；仅供参考，非医疗建议。
+                  </p>
                 </div>
               )}
             </div>

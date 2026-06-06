@@ -1,10 +1,27 @@
 import { useMemo } from 'react'
 import { CalendarDays, ShoppingCart } from 'lucide-react'
-import type { MealPlan, RecipeData } from '../../types/chat'
+import type { MealPlan, PlannedMeal, RecipeData } from '../../types/chat'
 import { useUIStore } from '../../store/useUIStore'
+
+const SLOTS_3 = ['早餐', '午餐', '晚餐']
+
+// 餐次：优先用 slot；没给但正好三餐时，按顺序补早/午/晚，保证一定标明
+function resolveSlot(meal: PlannedMeal, index: number, total: number): string | undefined {
+  if (meal.slot) return meal.slot
+  if (total === 3) return SLOTS_3[index]
+  return undefined
+}
 
 interface MealPlanCardProps {
   plan: MealPlan
+}
+
+// 餐次 → 图标
+function slotEmoji(slot: string): string {
+  if (slot.includes('早')) return '🌅'
+  if (slot.includes('午')) return '☀️'
+  if (slot.includes('晚')) return '🌙'
+  return '🍽'
 }
 
 // 把周计划里的每道菜转成 RecipeData，供购物清单聚合（只需 name + ingredients）
@@ -54,17 +71,28 @@ export function MealPlanCard({ plan }: MealPlanCardProps) {
             <div className="text-sm font-semibold mb-2" style={{ color: 'var(--accent)' }}>
               {day.day}
             </div>
-            <div className="space-y-1.5">
-              {(day.meals || []).map((meal, mi) => (
-                <div key={mi} className="flex items-baseline gap-2 text-sm">
-                  <span style={{ color: 'var(--text-primary)' }}>🍽 {meal.name}</span>
-                  {meal.brief && (
-                    <span className="truncate" style={{ color: 'var(--text-secondary)' }}>
-                      — {meal.brief}
+            <div className="space-y-2">
+              {(day.meals || []).map((meal, mi) => {
+                const slot = resolveSlot(meal, mi, (day.meals || []).length)
+                return (
+                  <div key={mi} className="flex gap-2 text-sm">
+                    <span
+                      className="flex-shrink-0 w-14 text-center px-2 py-0.5 rounded text-xs font-medium self-start"
+                      style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-secondary)' }}
+                    >
+                      {slot ? `${slotEmoji(slot)} ${slot}` : '🍽'}
                     </span>
-                  )}
-                </div>
-              ))}
+                    <div className="min-w-0">
+                      <div style={{ color: 'var(--text-primary)' }}>{meal.name}</div>
+                      {meal.brief && (
+                        <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                          {meal.brief}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
         ))}

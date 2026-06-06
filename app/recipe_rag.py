@@ -5,7 +5,10 @@
 #   建库：每条菜谱 → 拼成文本 → embedding → 归一化 → 存成矩阵（带指纹缓存）
 #   检索：用户 query → embedding → 归一化 → 和矩阵做点积(=余弦相似度) → 取 top-k
 import os
-# 国内从 HuggingFace 下载模型可能慢/被墙，优先走镜像（不影响已缓存的模型）。
+# 国内 HuggingFace 镜像 SSL 不稳定，且 fastembed 会先探测 HF 再回退。
+# 设 OFFLINE 让 HF 调用快速失败 → 直接走 GCS 源/本地已缓存模型，既稳又快。
+# （首次下载走 GCS，之后命中本地缓存 resources/fastembed_cache，不再联网。）
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
 
 import json
@@ -19,6 +22,8 @@ import numpy as np
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _RECIPES_PATH = _PROJECT_ROOT / "data" / "recipes.json"
 _VECTOR_CACHE = _PROJECT_ROOT / "resources" / "recipe_vectors.npz"
+# embedding 模型缓存到项目内固定目录：首次联网下载，之后直接从磁盘加载（不再联网）
+_MODEL_CACHE_DIR = _PROJECT_ROOT / "resources" / "fastembed_cache"
 _MODEL_NAME = "BAAI/bge-small-zh-v1.5"  # 中文专用、512 维、体积小
 
 # 懒加载的全局单例（避免每次检索都重新加载模型/向量）
@@ -33,7 +38,8 @@ def _get_embedder():
     global _embedder
     if _embedder is None:
         from fastembed import TextEmbedding
-        _embedder = TextEmbedding(model_name=_MODEL_NAME)
+        _MODEL_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        _embedder = TextEmbedding(model_name=_MODEL_NAME, cache_dir=str(_MODEL_CACHE_DIR))
     return _embedder
 
 

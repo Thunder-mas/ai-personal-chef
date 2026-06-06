@@ -22,6 +22,9 @@ resources/checkpoints.db
 # RAG 向量缓存（由 data/recipes.json 自动重建，不入库）
 resources/recipe_vectors.npz
 
+# 本地 embedding 模型缓存（约90MB 二进制，首次运行自动下载，不入库）
+resources/fastembed_cache/
+
 # 系统文件
 .DS_Store
 Thumbs.db

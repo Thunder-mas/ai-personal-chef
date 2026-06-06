@@ -12,6 +12,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.agents.ai_chef import chat_stream
 from app.preferences import get_preferences, add_preference, remove_preference
+from app.fitness import get_profile, save_profile, get_daily_targets
+from app.modes import get_mode, set_mode, list_modes
 
 app = FastAPI(title="AI Personal Chef API")
 
@@ -36,6 +38,19 @@ class ChatRequest(BaseModel):
 
 class PreferenceRequest(BaseModel):
     preference: str
+
+
+class FitnessProfileRequest(BaseModel):
+    gender: str          # 男 / 女
+    age: int
+    height_cm: float
+    weight_kg: float
+    activity_level: str  # 久坐/轻度/中度/高度/极高
+    goal: str            # 减脂/维持/增肌
+
+
+class ModeRequest(BaseModel):
+    mode: str            # gourmet / fitness / ...
 
 
 @app.post("/api/chat")
@@ -68,6 +83,29 @@ async def create_preference(req: PreferenceRequest):
 async def delete_preference(req: PreferenceRequest):
     remove_preference(req.preference)
     return {"preferences": get_preferences()}
+
+
+@app.get("/api/fitness/profile")
+async def fitness_profile():
+    return {"profile": get_profile(), "targets": get_daily_targets()}
+
+
+@app.post("/api/fitness/profile")
+async def update_fitness_profile(req: FitnessProfileRequest):
+    save_profile(req.gender, req.age, req.height_cm, req.weight_kg,
+                 req.activity_level, req.goal)
+    return {"profile": get_profile(), "targets": get_daily_targets()}
+
+
+@app.get("/api/mode")
+async def read_mode():
+    return {"mode": get_mode(), "modes": list_modes()}
+
+
+@app.post("/api/mode")
+async def update_mode(req: ModeRequest):
+    set_mode(req.mode)
+    return {"mode": get_mode(), "modes": list_modes()}
 
 
 @app.get("/api/health")

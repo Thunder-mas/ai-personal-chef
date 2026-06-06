@@ -168,7 +168,21 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         <div
           className="max-w-[80%] px-5 py-3.5 bg-[var(--bubble-user)] rounded-2xl rounded-br-md"
         >
-          <p className="whitespace-pre-wrap break-words">{message.content}</p>
+          {message.images && message.images.length > 0 && (
+            <div className="flex gap-2 flex-wrap mb-2">
+              {message.images.map((src, i) => (
+                <img
+                  key={i}
+                  src={src}
+                  alt="上传图片"
+                  className="w-32 h-32 object-cover rounded-lg"
+                />
+              ))}
+            </div>
+          )}
+          {message.content && (
+            <p className="whitespace-pre-wrap break-words">{message.content}</p>
+          )}
         </div>
       </div>
     )

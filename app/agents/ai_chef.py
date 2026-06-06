@@ -19,11 +19,15 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 
 from app.preferences import add_preference, remove_preference, get_preferences, init_pref_db
 from app.recipe_rag import search as rag_search
+from app.fitness import get_daily_targets, init_fitness_db
+from app.modes import get_mode_config, init_mode_db
 
 logger = logging.getLogger(__name__)
 
-# 确保偏好表存在
+# 确保偏好表、健身档案表、模式设置表存在
 init_pref_db()
+init_fitness_db()
+init_mode_db()
 
 # ==================== 1. 定义 State ====================
 class AgentState(TypedDict):
@@ -83,7 +87,12 @@ def search_local_recipes(query: str) -> str:
     """从本地菜谱知识库按语义检索最相关的菜谱（首选工具）。
     输入用户的食材或需求（如"番茄鸡蛋""想吃辣的下饭菜""清淡的菜"），
     返回库中匹配的菜谱（含食材、步骤等结构化信息）。库里有合适的就别再联网搜。"""
-    hits = rag_search(query, k=3)
+    try:
+        hits = rag_search(query, k=3)
+    except Exception as e:
+        # embedding 模型加载/网络失败时不拖垮对话，让 agent 退回联网搜索
+        logger.warning("本地菜谱检索失败: %s", e)
+        return "本地菜谱库暂时不可用，请改用 search_recipe 联网搜索。"
     if not hits:
         return "本地菜谱库没有相关结果。"
     # 去掉内部的相似度分，避免被写进给用户的菜谱 JSON
@@ -123,17 +132,35 @@ model = ChatOpenAI(
 
 # ==================== 5. 定义 Nodes ====================
 def _build_system_prompt() -> str:
-    """把当前已记录的用户偏好动态拼进系统提示，让每次推荐都遵守。"""
+    """按 当前模式 + 用户偏好 +（健身模式下）每日宏量目标，动态拼系统提示。"""
+    prompt = system_prompt
+
+    # 偏好：所有模式都遵守
     prefs = get_preferences()
-    if not prefs:
-        return system_prompt
-    pref_lines = "\n".join(f"- {p}" for p in prefs)
-    return (
-        system_prompt
-        + "\n\n## 用户偏好（必须遵守）\n"
-        + pref_lines
-        + "\n推荐菜谱时务必避开以上忌口/过敏项，并尽量贴合口味偏好。"
-    )
+    if prefs:
+        pref_lines = "\n".join(f"- {p}" for p in prefs)
+        prompt += (
+            "\n\n## 用户偏好（必须遵守）\n"
+            + pref_lines
+            + "\n推荐菜谱时务必避开以上忌口/过敏项，并尽量贴合口味偏好。"
+        )
+
+    # 当前模式的人设/行为
+    mode_cfg = get_mode_config()
+    prompt += "\n\n" + mode_cfg["prompt"]
+
+    # 仅健身类模式且已设档案 → 注入具体的每日宏量目标
+    if mode_cfg.get("uses_fitness"):
+        targets = get_daily_targets()
+        if targets:
+            prompt += (
+                "\n\n## 每日营养目标（必须贴合）\n"
+                f"- 目标：{targets['goal']}\n"
+                f"- 热量 {targets['calories']} kcal、蛋白质 {targets['protein']}g、"
+                f"碳水 {targets['carbs']}g、脂肪 {targets['fat']}g"
+            )
+
+    return prompt
 
 def agent_node(state: AgentState):
     """AI 模型思考并决定是否调用工具"""
@@ -218,6 +245,25 @@ def _to_lc_messages(messages):
     return result
 
 
+def _split_images_and_text(content):
+    """从（可能是多模态的）content 里分出图片 data-url 列表和文本。"""
+    if isinstance(content, str):
+        return [], content
+    if not isinstance(content, list):
+        return [], str(content or "")
+    images, texts = [], []
+    for part in content:
+        if not isinstance(part, dict):
+            continue
+        if part.get("type") == "image_url":
+            url = (part.get("image_url") or {}).get("url")
+            if url:
+                images.append(url)
+        elif part.get("type") == "text":
+            texts.append(part.get("text", ""))
+    return images, " ".join(t for t in texts if t)
+
+
 def _thread_has_history(thread_id: str) -> bool:
     """该 thread 在 checkpointer 里是否已有持久化历史。
     有 → 只需把新消息喂给 graph；无 → 用前端传来的全量历史"播种"。"""
@@ -240,6 +286,30 @@ def chat_stream(messages, thread_id=None):
     if not thread_id:
         thread_id = f"ephemeral-{uuid.uuid4()}"
     config = {"configurable": {"thread_id": thread_id}}
+
+    # 视觉前置：最新用户消息若带图片，先用多模态模型识别食材，
+    # 再把这条消息改写成纯文本喂给 agent（agent 用 mimo-v2.5，不处理图片）。
+    if messages and messages[-1].get("role") == "user":
+        image_urls, user_text = _split_images_and_text(messages[-1].get("content"))
+        if image_urls:
+            yield "📷 正在识别食材...\n\n"
+            try:
+                from app.vision import recognize_ingredients
+                ingredients = recognize_ingredients(image_urls, user_text)
+            except Exception as e:
+                logger.warning("食材识别失败: %s", e)
+                ingredients = ""
+            if ingredients and "未识别到食材" not in ingredients:
+                yield f"📷 识别到食材：{ingredients}\n\n"
+                if user_text:
+                    new_text = f"{user_text}\n\n（照片中识别到的食材：{ingredients}）请据此推荐菜谱。"
+                else:
+                    new_text = f"我有这些食材：{ingredients}。请推荐合适的菜谱。"
+            else:
+                yield "📷 没能从照片里识别出食材，你可以直接用文字告诉我有什么。\n\n"
+                new_text = user_text or "请根据我的描述推荐菜谱。"
+            # 用纯文本替换带图片的最新消息
+            messages = messages[:-1] + [{"role": "user", "content": new_text}]
 
     input_messages = _to_lc_messages(messages)
 

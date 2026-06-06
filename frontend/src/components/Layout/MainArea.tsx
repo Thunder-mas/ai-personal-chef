@@ -1,5 +1,6 @@
 import { MessageList } from '../Chat/MessageList'
 import { InputArea } from '../Chat/InputArea'
+import { ModeSwitcher } from './ModeSwitcher'
 
 export function MainArea() {
   return (
@@ -13,6 +14,7 @@ export function MainArea() {
         paddingRight: '16px',
       }}
     >
+      <ModeSwitcher />
       <MessageList />
       <InputArea />
     </div>

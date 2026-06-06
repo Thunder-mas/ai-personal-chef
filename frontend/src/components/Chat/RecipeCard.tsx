@@ -79,6 +79,42 @@ export function RecipeCard({ recipe }: RecipeCardProps) {
         )}
       </div>
 
+      {/* 每份营养（健身模式下 AI 填充 nutrition 时才显示） */}
+      {recipe.nutrition && (
+        <div
+          className="px-5 py-3"
+          style={{ borderBottom: '1px solid var(--border-color)' }}
+        >
+          <h4 className="text-xs font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>
+            🥗 每份营养
+          </h4>
+          <div className="flex gap-2">
+            {[
+              { label: '热量', value: recipe.nutrition.calories, unit: 'kcal', emoji: '🔥' },
+              { label: '蛋白', value: recipe.nutrition.protein, unit: 'g', emoji: '🍗' },
+              { label: '碳水', value: recipe.nutrition.carbs, unit: 'g', emoji: '🍚' },
+              { label: '脂肪', value: recipe.nutrition.fat, unit: 'g', emoji: '🥑' },
+            ].map((n) => (
+              <div
+                key={n.label}
+                className="flex-1 text-center px-2 py-1.5 rounded-lg"
+                style={{ backgroundColor: 'var(--bg-primary)' }}
+              >
+                <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                  {n.emoji} {n.label}
+                </div>
+                <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  {n.value}
+                  <span className="text-xs font-normal" style={{ color: 'var(--text-secondary)' }}>
+                    {n.unit}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 食材列表 */}
       <div className="px-5 py-4">
         <h4 className="text-sm font-semibold mb-3" style={{ color: 'var(--text-primary)' }}>

@@ -21,6 +21,12 @@ export interface RecipeData {
   steps: string[]        // 烹饪步骤
   tips?: string          // 可选小贴士
   tags?: string[]        // 可选标签：['川菜', '快手菜']
+  nutrition?: {          // 可选每份营养（健身模式下 AI 会填充）
+    calories: number     // 热量 kcal
+    protein: number      // 蛋白质 g
+    carbs: number        // 碳水 g
+    fat: number          // 脂肪 g
+  }
 }
 
 export interface PlannedMeal {

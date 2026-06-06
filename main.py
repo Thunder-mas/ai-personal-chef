@@ -1,4 +1,5 @@
 # main.py - AI私人厨师主程序
+import uuid
 from app.agents.ai_chef import graph as agent
 from app.recipe_text import format_recipe_blocks
 
@@ -9,6 +10,10 @@ def main():
   print("功能：根据你的食材推荐菜谱")
   print("输入 'quit' 或 'exit' 退出程序")
   print("=" * 50)
+
+  # 本次会话的记忆线程：graph 已挂 checkpointer，按 thread_id 记住整段对话，
+  # 所以每轮只需发新消息，AI 也能记得前面聊过什么。
+  config = {"configurable": {"thread_id": str(uuid.uuid4())}}
 
   while True:
       # 获取用户输入
@@ -27,9 +32,10 @@ def main():
       # 调用 AI 代理
       print("\n正在思考中...\n")
       try:
-          response = agent.invoke({
-              "messages": [{"role": "user", "content": user_input}]
-          })
+          response = agent.invoke(
+              {"messages": [{"role": "user", "content": user_input}]},
+              config=config,
+          )
 
           # 显示结果（把菜谱 JSON 渲染成可读文本，避免原样打印）
           print("AI 建议：")

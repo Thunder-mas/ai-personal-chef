@@ -1,0 +1,125 @@
+# app/recipe_rag.py
+# 菜谱知识库 RAG：本地 embedding + numpy 余弦相似度检索（不依赖任何向量数据库）。
+#
+# 流程一目了然：
+#   建库：每条菜谱 → 拼成文本 → embedding → 归一化 → 存成矩阵（带指纹缓存）
+#   检索：用户 query → embedding → 归一化 → 和矩阵做点积(=余弦相似度) → 取 top-k
+import os
+# 国内从 HuggingFace 下载模型可能慢/被墙，优先走镜像（不影响已缓存的模型）。
+os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
+
+import json
+import hashlib
+from pathlib import Path
+from typing import List, Dict, Any, Optional
+
+import numpy as np
+
+# ==================== 路径与模型 ====================
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+_RECIPES_PATH = _PROJECT_ROOT / "data" / "recipes.json"
+_VECTOR_CACHE = _PROJECT_ROOT / "resources" / "recipe_vectors.npz"
+_MODEL_NAME = "BAAI/bge-small-zh-v1.5"  # 中文专用、512 维、体积小
+
+# 懒加载的全局单例（避免每次检索都重新加载模型/向量）
+_embedder = None
+_recipes: Optional[List[Dict[str, Any]]] = None
+_matrix: Optional[np.ndarray] = None  # 形状 (N, dim)，已 L2 归一化
+
+
+# ==================== embedding ====================
+def _get_embedder():
+    """懒加载 embedding 模型：首次检索时才加载，不拖慢应用启动。"""
+    global _embedder
+    if _embedder is None:
+        from fastembed import TextEmbedding
+        _embedder = TextEmbedding(model_name=_MODEL_NAME)
+    return _embedder
+
+
+def _embed(texts: List[str]) -> np.ndarray:
+    """文本列表 → L2 归一化的向量矩阵。
+    归一化后，两向量的点积就等于余弦相似度，检索时一次矩阵乘法即可。"""
+    vecs = np.array(list(_get_embedder().embed(texts)), dtype=np.float32)
+    norms = np.linalg.norm(vecs, axis=1, keepdims=True)
+    return vecs / np.clip(norms, 1e-8, None)
+
+
+def _recipe_to_text(r: Dict[str, Any]) -> str:
+    """把一条菜谱拼成用于 embedding 的检索文本。
+    菜名 + 标签 + 描述 + 食材都纳入，能同时命中"菜名"和"我有什么食材"两类提问。"""
+    parts = [r.get("name", "")]
+    if r.get("tags"):
+        parts.append("，".join(r["tags"]))
+    if r.get("description"):
+        parts.append(r["description"])
+    ingredients = r.get("ingredients", [])
+    if ingredients:
+        parts.append("食材：" + "、".join(i.get("name", "") for i in ingredients))
+    return " ".join(p for p in parts if p)
+
+
+# ==================== 建库 / 缓存 ====================
+def _load_recipes() -> List[Dict[str, Any]]:
+    with open(_RECIPES_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _fingerprint(recipes: List[Dict[str, Any]]) -> str:
+    """菜谱内容 + 模型名的指纹。菜谱或模型一变，指纹变，缓存自动失效重算。"""
+    raw = _MODEL_NAME + json.dumps(recipes, ensure_ascii=False, sort_keys=True)
+    return hashlib.md5(raw.encode("utf-8")).hexdigest()
+
+
+def _ensure_index(force: bool = False) -> None:
+    """确保 recipes 和向量矩阵就绪：优先读缓存，指纹不符或 force 时重新 embedding。"""
+    global _recipes, _matrix
+    if not force and _recipes is not None and _matrix is not None:
+        return
+
+    recipes = _load_recipes()
+    fp = _fingerprint(recipes)
+
+    if not force and _VECTOR_CACHE.exists():
+        cached = np.load(_VECTOR_CACHE, allow_pickle=False)
+        if "fingerprint" in cached and cached["fingerprint"].item() == fp:
+            _recipes, _matrix = recipes, cached["matrix"]
+            return
+
+    # 缓存缺失/过期 → 重新 embedding 并落盘
+    matrix = _embed([_recipe_to_text(r) for r in recipes])
+    _VECTOR_CACHE.parent.mkdir(parents=True, exist_ok=True)
+    np.savez(_VECTOR_CACHE, matrix=matrix, fingerprint=np.array(fp))
+    _recipes, _matrix = recipes, matrix
+
+
+# ==================== 检索（对外接口）====================
+def search(query: str, k: int = 3) -> List[Dict[str, Any]]:
+    """RAG 检索：返回与 query 语义最相近的 k 条菜谱，每条附 _score 相似度。"""
+    _ensure_index()
+    q = _embed([query])[0]              # (dim,)
+    scores = _matrix @ q               # (N,) 每条菜谱与 query 的余弦相似度
+    top_idx = np.argsort(scores)[::-1][:k]
+    results = []
+    for i in top_idx:
+        recipe = dict(_recipes[int(i)])
+        recipe["_score"] = round(float(scores[int(i)]), 3)
+        results.append(recipe)
+    return results
+
+
+def rebuild() -> int:
+    """强制重建向量库（编辑过 data/recipes.json 后可手动调用）。返回菜谱条数。"""
+    _ensure_index(force=True)
+    return len(_recipes or [])
+
+
+if __name__ == "__main__":
+    # python -m app.recipe_rag  → 重建索引并跑一个演示查询
+    n = rebuild()
+    print(f"已为 {n} 条菜谱建立向量索引 → {_VECTOR_CACHE}")
+    for q in ["番茄鸡蛋怎么做", "我想吃辣的下饭菜", "清淡少油的菜"]:
+        hits = search(q, k=3)
+        print(f"\n🔍 {q}")
+        for r in hits:
+            print(f"   {r['_score']:.3f}  {r['name']}")

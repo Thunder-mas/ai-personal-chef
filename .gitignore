@@ -16,6 +16,12 @@ __pycache__/
 *.db-shm
 *.db-wal
 
+# LangGraph 对话记忆（运行时数据，会不断变大，不入库）
+resources/checkpoints.db
+
+# RAG 向量缓存（由 data/recipes.json 自动重建，不入库）
+resources/recipe_vectors.npz
+
 # 系统文件
 .DS_Store
 Thumbs.db

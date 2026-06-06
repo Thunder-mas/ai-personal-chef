@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import List, Any
+from typing import List, Any, Optional
 
 import sys
 import os
@@ -31,6 +31,7 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: List[Message]
+    thread_id: Optional[str] = None  # 对话记忆线程：同一对话用同一个 id，后端按它记住历史
 
 
 class PreferenceRequest(BaseModel):
@@ -43,7 +44,7 @@ async def chat(request: ChatRequest):
 
     def event_stream():
         try:
-            for chunk in chat_stream(messages):
+            for chunk in chat_stream(messages, thread_id=request.thread_id):
                 yield f"data: {json.dumps({'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
         except Exception as e:

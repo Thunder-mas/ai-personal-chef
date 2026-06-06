@@ -1,0 +1,355 @@
+[
+  {
+    "name": "西红柿炒蛋",
+    "description": "国民家常菜，酸甜下饭，几分钟搞定",
+    "difficulty": "简单",
+    "cookingTime": "10分钟",
+    "servings": 2,
+    "ingredients": [
+      {"name": "西红柿", "amount": "2个", "emoji": "🍅"},
+      {"name": "鸡蛋", "amount": "3个", "emoji": "🥚"},
+      {"name": "葱", "amount": "1根", "emoji": "🧅"},
+      {"name": "糖", "amount": "1小勺", "emoji": "🧂"},
+      {"name": "盐", "amount": "适量", "emoji": "🧂"}
+    ],
+    "steps": [
+      "鸡蛋打散加少许盐，热油炒成大块盛出",
+      "西红柿切块下锅，炒出红汁，加一小勺糖提味",
+      "倒回鸡蛋翻匀，加盐调味，撒葱花出锅"
+    ],
+    "tips": "加糖能中和西红柿酸味，喜欢有汤汁可加两勺水",
+    "tags": ["家常菜", "快手菜", "下饭"]
+  },
+  {
+    "name": "红烧肉",
+    "description": "肥而不腻、入口即化的经典硬菜",
+    "difficulty": "中等",
+    "cookingTime": "70分钟",
+    "servings": 4,
+    "ingredients": [
+      {"name": "五花肉", "amount": "500g", "emoji": "🥓"},
+      {"name": "冰糖", "amount": "30g", "emoji": "🍬"},
+      {"name": "生抽", "amount": "2勺", "emoji": "🫗"},
+      {"name": "老抽", "amount": "1勺", "emoji": "🫗"},
+      {"name": "姜", "amount": "3片", "emoji": "🫚"},
+      {"name": "八角", "amount": "2颗", "emoji": "🌟"}
+    ],
+    "steps": [
+      "五花肉切块冷水下锅焯水，捞出沥干",
+      "锅中少油下冰糖小火炒出焦糖色，下肉块翻炒上色",
+      "加姜片、八角、生抽、老抽，倒热水没过肉",
+      "大火烧开转小火炖50分钟，最后大火收汁"
+    ],
+    "tips": "炒糖色要小火，发红冒小泡立刻下肉，否则会苦",
+    "tags": ["硬菜", "炖菜", "宴客"]
+  },
+  {
+    "name": "麻婆豆腐",
+    "description": "麻辣鲜香，嫩豆腐配肉末超级下饭",
+    "difficulty": "中等",
+    "cookingTime": "20分钟",
+    "servings": 3,
+    "ingredients": [
+      {"name": "嫩豆腐", "amount": "1盒", "emoji": "🧊"},
+      {"name": "肉末", "amount": "100g", "emoji": "🥩"},
+      {"name": "郫县豆瓣酱", "amount": "2勺", "emoji": "🌶️"},
+      {"name": "花椒粉", "amount": "适量", "emoji": "🌶️"},
+      {"name": "蒜苗", "amount": "2根", "emoji": "🌿"},
+      {"name": "淀粉", "amount": "1勺", "emoji": "🥄"}
+    ],
+    "steps": [
+      "豆腐切块，淡盐水焯1分钟去豆腥，捞出备用",
+      "热油炒香肉末，下豆瓣酱炒出红油",
+      "加水烧开，放入豆腐轻推煮3分钟",
+      "淋水淀粉勾芡，撒花椒粉和蒜苗段出锅"
+    ],
+    "tips": "勾芡分两次更浓稠，全程用铲背轻推免得豆腐碎",
+    "tags": ["川菜", "麻辣", "下饭"]
+  },
+  {
+    "name": "宫保鸡丁",
+    "description": "酸甜微辣、鸡肉滑嫩花生香脆",
+    "difficulty": "中等",
+    "cookingTime": "25分钟",
+    "servings": 3,
+    "ingredients": [
+      {"name": "鸡胸肉", "amount": "300g", "emoji": "🍗"},
+      {"name": "花生米", "amount": "50g", "emoji": "🥜"},
+      {"name": "干辣椒", "amount": "8个", "emoji": "🌶️"},
+      {"name": "大葱", "amount": "1段", "emoji": "🧅"},
+      {"name": "醋", "amount": "2勺", "emoji": "🫗"},
+      {"name": "糖", "amount": "1勺", "emoji": "🧂"}
+    ],
+    "steps": [
+      "鸡肉切丁，加生抽、淀粉腌10分钟",
+      "调碗汁：醋、糖、生抽、淀粉、少许水拌匀",
+      "热油滑炒鸡丁至变色盛出",
+      "爆香干辣椒花椒，下鸡丁、葱段，倒碗汁炒匀，撒花生"
+    ],
+    "tips": "花生提前炸脆最后放，保持脆口；碗汁要先调好",
+    "tags": ["川菜", "酸甜", "经典"]
+  },
+  {
+    "name": "鱼香肉丝",
+    "description": "咸甜酸辣俱全的下饭神菜，没有鱼却有鱼香",
+    "difficulty": "中等",
+    "cookingTime": "25分钟",
+    "servings": 3,
+    "ingredients": [
+      {"name": "猪里脊", "amount": "250g", "emoji": "🥩"},
+      {"name": "黑木耳", "amount": "1把", "emoji": "🍄"},
+      {"name": "胡萝卜", "amount": "半根", "emoji": "🥕"},
+      {"name": "泡椒", "amount": "2勺", "emoji": "🌶️"},
+      {"name": "醋", "amount": "2勺", "emoji": "🫗"},
+      {"name": "糖", "amount": "1.5勺", "emoji": "🧂"}
+    ],
+    "steps": [
+      "里脊切丝加料酒淀粉腌制；木耳胡萝卜切丝",
+      "调鱼香汁：醋、糖、生抽、淀粉、水",
+      "滑炒肉丝变色盛出，爆香泡椒姜蒜",
+      "下木耳胡萝卜炒断生，回锅肉丝倒汁炒匀"
+    ],
+    "tips": "糖醋比例约1:1.5，泡椒是鱼香味的灵魂",
+    "tags": ["川菜", "下饭", "经典"]
+  },
+  {
+    "name": "青椒土豆丝",
+    "description": "清爽爽脆的快手素菜",
+    "difficulty": "简单",
+    "cookingTime": "15分钟",
+    "servings": 2,
+    "ingredients": [
+      {"name": "土豆", "amount": "2个", "emoji": "🥔"},
+      {"name": "青椒", "amount": "1个", "emoji": "🫑"},
+      {"name": "蒜", "amount": "2瓣", "emoji": "🧄"},
+      {"name": "白醋", "amount": "1勺", "emoji": "🫗"},
+      {"name": "盐", "amount": "适量", "emoji": "🧂"}
+    ],
+    "steps": [
+      "土豆切细丝，泡水洗去淀粉，沥干",
+      "青椒切丝，蒜切末",
+      "热油爆香蒜末，下土豆丝大火快炒",
+      "加白醋、青椒丝炒至断生，加盐出锅"
+    ],
+    "tips": "土豆丝泡水去淀粉才爽脆，全程大火快炒",
+    "tags": ["素菜", "快手菜", "爽脆"]
+  },
+  {
+    "name": "可乐鸡翅",
+    "description": "甜香入味，零失败的网红家常菜",
+    "difficulty": "简单",
+    "cookingTime": "30分钟",
+    "servings": 3,
+    "ingredients": [
+      {"name": "鸡翅中", "amount": "10个", "emoji": "🍗"},
+      {"name": "可乐", "amount": "1罐", "emoji": "🥤"},
+      {"name": "生抽", "amount": "2勺", "emoji": "🫗"},
+      {"name": "姜", "amount": "3片", "emoji": "🫚"},
+      {"name": "葱", "amount": "1根", "emoji": "🧅"}
+    ],
+    "steps": [
+      "鸡翅两面划刀，焯水去血沫",
+      "锅中少油把鸡翅煎至两面金黄",
+      "倒入可乐没过鸡翅，加生抽姜片",
+      "大火烧开转中小火炖15分钟，大火收浓汤汁"
+    ],
+    "tips": "用煎代替炸更健康，划刀更入味",
+    "tags": ["家常菜", "甜口", "新手"]
+  },
+  {
+    "name": "番茄牛腩",
+    "description": "汤浓肉烂、酸甜暖胃的炖菜",
+    "difficulty": "中等",
+    "cookingTime": "90分钟",
+    "servings": 4,
+    "ingredients": [
+      {"name": "牛腩", "amount": "500g", "emoji": "🥩"},
+      {"name": "西红柿", "amount": "3个", "emoji": "🍅"},
+      {"name": "番茄酱", "amount": "2勺", "emoji": "🥫"},
+      {"name": "洋葱", "amount": "半个", "emoji": "🧅"},
+      {"name": "姜", "amount": "3片", "emoji": "🫚"}
+    ],
+    "steps": [
+      "牛腩切块冷水焯水，撇去浮沫捞出",
+      "炒香洋葱姜片，下西红柿块炒出沙",
+      "加番茄酱炒匀，放牛腩加热水没过",
+      "炖1小时至软烂，加盐调味收浓汤汁"
+    ],
+    "tips": "一半西红柿炒成沙做底、一半后放保留果肉口感",
+    "tags": ["炖菜", "汤菜", "暖胃"]
+  },
+  {
+    "name": "蒜蓉西兰花",
+    "description": "清淡少油的快手健康菜",
+    "difficulty": "简单",
+    "cookingTime": "12分钟",
+    "servings": 2,
+    "ingredients": [
+      {"name": "西兰花", "amount": "1棵", "emoji": "🥦"},
+      {"name": "蒜", "amount": "4瓣", "emoji": "🧄"},
+      {"name": "蚝油", "amount": "1勺", "emoji": "🫗"},
+      {"name": "盐", "amount": "适量", "emoji": "🧂"}
+    ],
+    "steps": [
+      "西兰花掰小朵，淡盐水泡5分钟洗净",
+      "沸水加盐焯1分钟，捞出过凉水保持翠绿",
+      "热油爆香蒜末，下西兰花快炒",
+      "加蚝油和盐炒匀出锅"
+    ],
+    "tips": "焯水过凉能让西兰花更绿更脆",
+    "tags": ["素菜", "清淡", "健康"]
+  },
+  {
+    "name": "糖醋里脊",
+    "description": "外酥里嫩、酸甜开胃的经典菜",
+    "difficulty": "中等",
+    "cookingTime": "35分钟",
+    "servings": 3,
+    "ingredients": [
+      {"name": "猪里脊", "amount": "300g", "emoji": "🥩"},
+      {"name": "番茄酱", "amount": "3勺", "emoji": "🥫"},
+      {"name": "白醋", "amount": "2勺", "emoji": "🫗"},
+      {"name": "糖", "amount": "3勺", "emoji": "🧂"},
+      {"name": "淀粉", "amount": "适量", "emoji": "🥄"}
+    ],
+    "steps": [
+      "里脊切条，加盐料酒腌制，裹淀粉糊",
+      "六成油温下锅炸定型，复炸一次至金黄酥脆",
+      "调糖醋汁：番茄酱、白醋、糖、少许水",
+      "另起锅熬稠糖醋汁，倒入里脊快速裹匀"
+    ],
+    "tips": "复炸是酥脆关键；糖醋汁熬到能挂勺再下里脊",
+    "tags": ["酸甜", "宴客", "经典"]
+  },
+  {
+    "name": "清蒸鲈鱼",
+    "description": "鲜嫩清淡，最大程度保留鱼的本味",
+    "difficulty": "简单",
+    "cookingTime": "20分钟",
+    "servings": 3,
+    "ingredients": [
+      {"name": "鲈鱼", "amount": "1条", "emoji": "🐟"},
+      {"name": "葱", "amount": "2根", "emoji": "🧅"},
+      {"name": "姜", "amount": "5片", "emoji": "🫚"},
+      {"name": "蒸鱼豉油", "amount": "3勺", "emoji": "🫗"}
+    ],
+    "steps": [
+      "鲈鱼处理干净，两面划刀，鱼身鱼腹塞姜葱",
+      "水开后上锅大火蒸8分钟，关火虚蒸2分钟",
+      "倒掉盘中腥水，铺新葱姜丝",
+      "淋蒸鱼豉油，浇上烧热的油激香"
+    ],
+    "tips": "蒸的时间按鱼大小调整，8分钟最嫩；热油激葱丝最香",
+    "tags": ["清淡", "海鲜", "健康"]
+  },
+  {
+    "name": "蛋炒饭",
+    "description": "粒粒分明、金黄喷香的国民主食",
+    "difficulty": "简单",
+    "cookingTime": "12分钟",
+    "servings": 2,
+    "ingredients": [
+      {"name": "隔夜米饭", "amount": "2碗", "emoji": "🍚"},
+      {"name": "鸡蛋", "amount": "2个", "emoji": "🥚"},
+      {"name": "葱", "amount": "2根", "emoji": "🧅"},
+      {"name": "胡萝卜", "amount": "半根", "emoji": "🥕"},
+      {"name": "盐", "amount": "适量", "emoji": "🧂"}
+    ],
+    "steps": [
+      "鸡蛋打散，胡萝卜切丁，葱切花",
+      "热油倒蛋液炒散，下米饭压散炒匀",
+      "加胡萝卜丁翻炒，调盐",
+      "撒葱花炒香出锅"
+    ],
+    "tips": "用隔夜饭最好，米饭压散别成团才粒粒分明",
+    "tags": ["主食", "快手菜", "新手"]
+  },
+  {
+    "name": "紫菜蛋花汤",
+    "description": "三分钟搞定的清爽暖身汤",
+    "difficulty": "简单",
+    "cookingTime": "8分钟",
+    "servings": 2,
+    "ingredients": [
+      {"name": "紫菜", "amount": "1小把", "emoji": "🟢"},
+      {"name": "鸡蛋", "amount": "1个", "emoji": "🥚"},
+      {"name": "虾皮", "amount": "1勺", "emoji": "🦐"},
+      {"name": "香油", "amount": "几滴", "emoji": "🫗"},
+      {"name": "葱", "amount": "1根", "emoji": "🧅"}
+    ],
+    "steps": [
+      "碗中放紫菜、虾皮备用",
+      "锅中水烧开，淋入蛋液划出蛋花",
+      "加盐调味，冲入装紫菜的碗中",
+      "淋香油撒葱花即可"
+    ],
+    "tips": "蛋液要在水微沸时画圈淋入，蛋花更漂亮",
+    "tags": ["汤", "清淡", "快手菜"]
+  },
+  {
+    "name": "凉拌黄瓜",
+    "description": "爽脆开胃的夏日凉菜",
+    "difficulty": "简单",
+    "cookingTime": "10分钟",
+    "servings": 2,
+    "ingredients": [
+      {"name": "黄瓜", "amount": "2根", "emoji": "🥒"},
+      {"name": "蒜", "amount": "3瓣", "emoji": "🧄"},
+      {"name": "生抽", "amount": "1勺", "emoji": "🫗"},
+      {"name": "香醋", "amount": "1勺", "emoji": "🫗"},
+      {"name": "辣椒油", "amount": "适量", "emoji": "🌶️"}
+    ],
+    "steps": [
+      "黄瓜拍裂切段，加少许盐腌5分钟，倒掉水",
+      "蒜切末，调生抽、香醋、辣椒油、糖成料汁",
+      "料汁淋在黄瓜上拌匀",
+      "撒少许熟芝麻即可"
+    ],
+    "tips": "拍黄瓜比刀切更入味，腌出水后口感更脆",
+    "tags": ["凉菜", "爽脆", "下酒"]
+  },
+  {
+    "name": "干煸豆角",
+    "description": "豆角焦香入味，咸香微辣超下饭",
+    "difficulty": "中等",
+    "cookingTime": "20分钟",
+    "servings": 3,
+    "ingredients": [
+      {"name": "四季豆", "amount": "400g", "emoji": "🫛"},
+      {"name": "肉末", "amount": "80g", "emoji": "🥩"},
+      {"name": "干辣椒", "amount": "5个", "emoji": "🌶️"},
+      {"name": "蒜", "amount": "3瓣", "emoji": "🧄"},
+      {"name": "生抽", "amount": "1勺", "emoji": "🫗"}
+    ],
+    "steps": [
+      "四季豆掐头去筋掰段，洗净擦干水分",
+      "少油中火把豆角煸到表皮起皱发软盛出",
+      "爆香肉末、干辣椒、蒜末",
+      "回锅豆角，加生抽炒匀出锅"
+    ],
+    "tips": "豆角一定要煸熟煸透，否则可能引起不适",
+    "tags": ["下饭", "微辣", "家常菜"]
+  },
+  {
+    "name": "红烧茄子",
+    "description": "软糯入味、酱香浓郁的下饭素菜",
+    "difficulty": "中等",
+    "cookingTime": "25分钟",
+    "servings": 3,
+    "ingredients": [
+      {"name": "茄子", "amount": "2根", "emoji": "🍆"},
+      {"name": "蒜", "amount": "4瓣", "emoji": "🧄"},
+      {"name": "生抽", "amount": "2勺", "emoji": "🫗"},
+      {"name": "蚝油", "amount": "1勺", "emoji": "🫗"},
+      {"name": "糖", "amount": "1勺", "emoji": "🧂"}
+    ],
+    "steps": [
+      "茄子切滚刀块，撒盐腌10分钟挤去水分",
+      "茄子裹薄淀粉，下锅煎或炸到表面金黄",
+      "调汁：生抽、蚝油、糖、少许水淀粉",
+      "爆香蒜末，下茄子倒入料汁炒匀收汁"
+    ],
+    "tips": "茄子先腌挤水再裹淀粉，能少吸油又入味",
+    "tags": ["素菜", "下饭", "酱香"]
+  }
+]

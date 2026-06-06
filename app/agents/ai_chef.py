@@ -3,7 +3,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
+import json
 import logging
+import uuid
+import sqlite3
+from pathlib import Path
 from typing import TypedDict, Annotated, Sequence
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, AIMessageChunk, SystemMessage
 from langchain_core.tools import tool
@@ -11,8 +15,10 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
+from langgraph.checkpoint.sqlite import SqliteSaver
 
 from app.preferences import add_preference, remove_preference, get_preferences, init_pref_db
+from app.recipe_rag import search as rag_search
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +30,11 @@ class AgentState(TypedDict):
     messages: Annotated[Sequence[BaseMessage], add_messages]
 
 # ==================== 2. 定义系统提示 ====================
-system_prompt = """你是私人厨师。根据用户食材推荐菜谱。优先用 search_recipe 工具搜索。
+system_prompt = """你是私人厨师。根据用户食材推荐菜谱。
+
+## 检索优先级
+- 推荐菜谱时，先调用 search_local_recipes 从本地菜谱库按语义检索；命中合适的就基于它来回答（可直接用返回的食材与步骤填充下方 recipe 卡片）。
+- 只有本地库没有合适结果时，才用 search_recipe 联网搜索。
 
 ## 菜谱格式（必须严格遵守）
 
@@ -69,8 +79,21 @@ _tavily_search = TavilySearch(
 )
 
 @tool
+def search_local_recipes(query: str) -> str:
+    """从本地菜谱知识库按语义检索最相关的菜谱（首选工具）。
+    输入用户的食材或需求（如"番茄鸡蛋""想吃辣的下饭菜""清淡的菜"），
+    返回库中匹配的菜谱（含食材、步骤等结构化信息）。库里有合适的就别再联网搜。"""
+    hits = rag_search(query, k=3)
+    if not hits:
+        return "本地菜谱库没有相关结果。"
+    # 去掉内部的相似度分，避免被写进给用户的菜谱 JSON
+    clean = [{k: v for k, v in r.items() if k != "_score"} for r in hits]
+    return json.dumps(clean, ensure_ascii=False)
+
+
+@tool
 def search_recipe(query: str) -> str:
-    """搜索菜谱，根据食材查找推荐菜谱"""
+    """联网搜索菜谱（本地知识库没有合适结果时再用）。"""
     result = _tavily_search.invoke(query)
     return str(result)
 
@@ -86,8 +109,8 @@ def forget_preference(preference: str) -> str:
     remove_preference(preference)
     return f"已删除偏好：{preference}"
 
-# 工具列表
-tools = [search_recipe, save_preference, forget_preference]
+# 工具列表（本地知识库检索放最前，优先级最高）
+tools = [search_local_recipes, search_recipe, save_preference, forget_preference]
 
 # ==================== 4. 定义模型 ====================
 model = ChatOpenAI(
@@ -169,28 +192,70 @@ workflow.add_conditional_edges(
 # 工具调用后回到 agent
 workflow.add_edge("tools", "agent")
 
-# 编译图
-graph = workflow.compile()
+# ==================== 7.5 持久化记忆（checkpointer）====================
+# SqliteSaver 把每个 thread_id 的对话状态（messages 等）存进 SQLite。
+# 这样后端自己就"记得"整段对话，前端不必每次重发全量历史。
+# check_same_thread=False：FastAPI 在线程池里跑同步生成器，需允许跨线程共享连接。
+_CHECKPOINT_DB = Path(__file__).resolve().parents[2] / "resources" / "checkpoints.db"
+_checkpoint_conn = sqlite3.connect(str(_CHECKPOINT_DB), check_same_thread=False)
+checkpointer = SqliteSaver(_checkpoint_conn)
+checkpointer.setup()  # 幂等：首次创建 checkpoints 相关表
+
+# 编译图（挂上 checkpointer，graph 从此按 thread_id 具备记忆）
+graph = workflow.compile(checkpointer=checkpointer)
 
 # ==================== 8. 流式输出函数 ====================
-def chat_stream(messages):
-    """流式聊天 - 使用 LangGraph"""
-    # 转换消息格式（保留完整对话历史）
-    input_messages = []
+def _to_lc_messages(messages):
+    """把 [{"role","content"}] 转成 LangChain 消息对象。"""
+    result = []
     for msg in messages:
         role = msg["role"]
         content = msg["content"]
         if role == "user":
-            if isinstance(content, list):
-                input_messages.append(HumanMessage(content=content))
-            else:
-                input_messages.append(HumanMessage(content=content))
+            result.append(HumanMessage(content=content))
         elif role == "assistant" and isinstance(content, str):
-            input_messages.append(AIMessage(content=content))
+            result.append(AIMessage(content=content))
+    return result
+
+
+def _thread_has_history(thread_id: str) -> bool:
+    """该 thread 在 checkpointer 里是否已有持久化历史。
+    有 → 只需把新消息喂给 graph；无 → 用前端传来的全量历史"播种"。"""
+    try:
+        snapshot = graph.get_state({"configurable": {"thread_id": thread_id}})
+        return bool(snapshot.values.get("messages"))
+    except Exception:
+        return False
+
+
+def chat_stream(messages, thread_id=None):
+    """流式聊天 - 使用 LangGraph + checkpointer 记忆。
+
+    - 传 thread_id：对话历史由 SqliteSaver 持久化在后端。
+      · 线程已有历史 → 只把最新一条用户消息交给 graph，其余由 checkpointer 自动补上。
+      · 线程是新的   → 用前端传来的全量历史播种（兼容升级前已存在的老对话）。
+    - 不传 thread_id → 用一次性 ephemeral 线程，行为等同无记忆（每次发全量历史，如 Streamlit）。
+    """
+    # graph 已挂 checkpointer，调用必须带 thread_id，否则会报错；没有就给个一次性的。
+    if not thread_id:
+        thread_id = f"ephemeral-{uuid.uuid4()}"
+    config = {"configurable": {"thread_id": thread_id}}
+
+    input_messages = _to_lc_messages(messages)
+
+    # 已有记忆的线程：只发最新用户消息，避免和持久化历史重复堆叠
+    if _thread_has_history(thread_id):
+        last_user = next(
+            (m for m in reversed(input_messages) if isinstance(m, HumanMessage)),
+            None,
+        )
+        if last_user is not None:
+            input_messages = [last_user]
 
     # messages 模式实现逐 token 流式输出；updates 模式捕获工具节点，给出搜索提示
     for mode, chunk in graph.stream(
         {"messages": input_messages},
+        config=config,
         stream_mode=["updates", "messages"],
     ):
         if mode == "updates":

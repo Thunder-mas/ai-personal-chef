@@ -175,7 +175,8 @@ export const useChatStore = create<ChatState>()(
             ?.messages.filter((m) => m.id !== assistantMsg.id) ?? []
 
           let accumulated = ''
-          for await (const chunk of streamChat(currentMessages, controller.signal)) {
+          // convId 作为 thread_id：后端按它持久化记忆，老对话首次会用全量历史播种
+          for await (const chunk of streamChat(currentMessages, controller.signal, convId ?? undefined)) {
             accumulated += chunk
             set((state) => ({
               conversations: state.conversations.map((c) =>

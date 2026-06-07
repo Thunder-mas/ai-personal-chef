@@ -65,13 +65,16 @@ export function InputArea() {
 
     const base64Images = await Promise.all(images.map((img) => fileToBase64(img.file)))
 
-    await sendMessage(trimmed, base64Images.length > 0 ? base64Images : undefined)
+    // 立即清空输入框与图片预览（不等 AI 回复结束）
     setInput('')
     images.forEach((img) => URL.revokeObjectURL(img.preview))
     setImages([])
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
+
+    // 发送：sendMessage 内部会把用户消息入列并流式更新对话，无需 await 来清空输入
+    await sendMessage(trimmed, base64Images.length > 0 ? base64Images : undefined)
   }
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {

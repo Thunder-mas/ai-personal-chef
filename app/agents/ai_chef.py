@@ -338,14 +338,16 @@ def chat_stream(messages, thread_id=None, mode=None):
             input_messages = [last_user]
 
     # messages 模式实现逐 token 流式输出；updates 模式捕获工具节点，给出搜索提示
+    searched = False  # 一次回复里"正在搜索"最多提示一次（哪怕多轮调用工具）
     for mode, chunk in graph.stream(
         {"messages": input_messages},
         config=config,
         stream_mode=["updates", "messages"],
     ):
         if mode == "updates":
-            # 工具节点执行完毕后提示正在搜索
-            if "tools" in chunk:
+            # 工具节点执行后只提示一次，避免多次搜索冒出多个提示
+            if "tools" in chunk and not searched:
+                searched = True
                 yield "🔍 正在搜索菜谱...\n\n"
         elif mode == "messages":
             token, _metadata = chunk

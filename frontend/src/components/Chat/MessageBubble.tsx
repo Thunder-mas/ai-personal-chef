@@ -15,34 +15,36 @@ type Segment =
   | { type: 'recipe'; recipe: RecipeData }
   | { type: 'mealplan'; plan: MealPlan }
 
-function cleanJsonStr(jsonStr: string): string {
-  // 只匹配 servings 字段的值，不吞掉后面的逗号或括号
-  return jsonStr.replace(/"servings"\s*:\s*"?(\d+)\s*[^,}\]]*"?/g, '"servings":$1')
+// 轻量修复常见的 LLM JSON 小毛病
+function repairJson(jsonStr: string): string {
+  let t = jsonStr.trim()
+  // servings 写成 "2人份" 之类 → 取数字
+  t = t.replace(/"servings"\s*:\s*"?(\d+)\s*[^,}\]]*"?/g, '"servings":$1')
+  // 去掉对象/数组结尾多余的逗号： ,}  ,]
+  t = t.replace(/,\s*([}\]])/g, '$1')
+  return t
 }
 
-function tryParseRecipe(jsonStr: string): RecipeData | null {
+// 把一段 JSON 按"形状"分派成 菜谱 / 周计划 卡片；不符合则返回 null
+function parseCard(jsonStr: string): Segment | null {
+  let parsed: any
   try {
-    const cleaned = cleanJsonStr(jsonStr.trim())
-    const parsed = JSON.parse(cleaned)
-    if (parsed.name && parsed.ingredients && parsed.steps) {
-      return parsed as RecipeData
-    }
+    parsed = JSON.parse(repairJson(jsonStr))
   } catch {
-    // 解析失败
+    return null
+  }
+  if (parsed && Array.isArray(parsed.days) && parsed.days.length > 0) {
+    return { type: 'mealplan', plan: parsed as MealPlan }
+  }
+  if (parsed && parsed.name && parsed.ingredients && parsed.steps) {
+    return { type: 'recipe', recipe: parsed as RecipeData }
   }
   return null
 }
 
-function tryParseMealPlan(jsonStr: string): MealPlan | null {
-  try {
-    const parsed = JSON.parse(jsonStr.trim())
-    if (parsed && Array.isArray(parsed.days) && parsed.days.length > 0) {
-      return parsed as MealPlan
-    }
-  } catch {
-    // 解析失败
-  }
-  return null
+// 去掉残留的代码围栏标记，避免把 ```recipe / ``` 当普通文本显示出来
+function cleanText(s: string): string {
+  return s.replace(/```[a-zA-Z]*/g, '').trim()
 }
 
 // 从文本中智能提取JSON对象（处理嵌套括号）
@@ -88,65 +90,43 @@ function extractJsonObjects(text: string): string[] {
   return results
 }
 
-function parseAllRecipes(content: string): Segment[] {
+function parseAllRecipes(content: string, isStreaming: boolean): Segment[] {
   const segments: Segment[] = []
 
-  // 策略1：匹配所有代码块，按语言标签分派（mealplan / recipe|json）
-  const codeBlockRegex = /```(\w+)?\s*\n?([\s\S]*?)\n?\s*```/g
+  // 用花括号匹配找出所有【完整】JSON 对象（不依赖代码围栏是否闭合，最稳），按形状分派卡片
   const blocks: Array<{ start: number; end: number; seg: Segment }> = []
-
-  let match: RegExpExecArray | null
-  while ((match = codeBlockRegex.exec(content)) !== null) {
-    const tag = (match[1] || '').toLowerCase()
-    const body = match[2]
-    const range = { start: match.index, end: match.index + match[0].length }
-    if (tag === 'mealplan') {
-      const plan = tryParseMealPlan(body)
-      if (plan) blocks.push({ ...range, seg: { type: 'mealplan', plan } })
-    } else {
-      const recipe = tryParseRecipe(body)
-      if (recipe) blocks.push({ ...range, seg: { type: 'recipe', recipe } })
-    }
+  let searchFrom = 0
+  for (const jsonStr of extractJsonObjects(content)) {
+    const seg = parseCard(jsonStr)
+    if (!seg) continue
+    const start = content.indexOf(jsonStr, searchFrom)
+    if (start < 0) continue
+    blocks.push({ start, end: start + jsonStr.length, seg })
+    searchFrom = start + jsonStr.length
   }
 
-  // 策略2：如果没有代码块匹配，扫描全文找JSON对象（仅菜谱）
-  if (blocks.length === 0) {
-    const jsonObjects = extractJsonObjects(content)
-    for (const jsonStr of jsonObjects) {
-      const recipe = tryParseRecipe(jsonStr)
-      if (recipe) {
-        const startIdx = content.indexOf(jsonStr)
-        blocks.push({
-          start: startIdx,
-          end: startIdx + jsonStr.length,
-          seg: { type: 'recipe', recipe },
-        })
-        break
-      }
-    }
-  }
-
-  // 按位置排序
-  blocks.sort((a, b) => a.start - b.start)
-
-  // 根据代码块位置切割内容
+  // 卡片之间/前后的文本（去掉残留围栏）
   let lastEnd = 0
   for (const block of blocks) {
-    const textBefore = content.slice(lastEnd, block.start).trim()
-    if (textBefore) {
-      segments.push({ type: 'text', content: textBefore })
-    }
+    const before = cleanText(content.slice(lastEnd, block.start))
+    if (before) segments.push({ type: 'text', content: before })
     segments.push(block.seg)
     lastEnd = block.end
   }
 
-  // 剩余文本
-  const remaining = content.slice(lastEnd).trim()
-  if (remaining) {
-    segments.push({ type: 'text', content: remaining })
+  // 尾部：流式中若有尚未闭合的卡片 JSON（{ 多于 }），用占位代替，避免露出原始 JSON
+  const tail = content.slice(lastEnd)
+  const opens = (tail.match(/\{/g) || []).length
+  const closes = (tail.match(/\}/g) || []).length
+  if (isStreaming && opens > closes) {
+    const head = cleanText(tail.slice(0, tail.indexOf('{')))
+    if (head) segments.push({ type: 'text', content: head })
+    segments.push({ type: 'text', content: '🍳 正在生成卡片…' })
+  } else {
+    const t = cleanText(tail)
+    if (t) segments.push({ type: 'text', content: t })
   }
 
-  // 如果没有任何匹配，返回原始内容
   if (segments.length === 0) {
     segments.push({ type: 'text', content })
   }
@@ -158,8 +138,8 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === 'user'
 
   const segments = useMemo(
-    () => (isUser ? [] : parseAllRecipes(message.content)),
-    [isUser, message.content]
+    () => (isUser ? [] : parseAllRecipes(message.content, message.status === 'streaming')),
+    [isUser, message.content, message.status]
   )
 
   if (isUser) {

@@ -197,7 +197,7 @@ export const useChatStore = create<ChatState>()(
 
           let accumulated = ''
           // convId 作为 thread_id；convMode 作为该对话的模式（每对话独立）
-          const convMode = get().conversations.find((c) => c.id === convId)?.mode
+          const convMode = get().conversations.find((c) => c.id === convId)?.mode ?? 'gourmet'
           for await (const chunk of streamChat(currentMessages, controller.signal, convId ?? undefined, convMode)) {
             accumulated += chunk
             set((state) => ({
@@ -288,9 +288,9 @@ export const useChatStore = create<ChatState>()(
     }),
     {
       name: 'ai-chef-storage',
-      version: 1,
-      // v0 的 favoriteRecipes 是 string[]（仅菜名），v1 升级为完整 RecipeData[]。
-      // 旧菜名无法还原食材，转成占位对象（空食材，不参与购物清单聚合）。
+      version: 2,
+      // v0→v1：favoriteRecipes string[] → 完整 RecipeData[]
+      // v1→v2：给模式系统之前建的老对话补默认模式 gourmet
       migrate: (persisted: any, version: number) => {
         if (version < 1 && persisted?.conversations) {
           persisted.conversations = persisted.conversations.map((c: any) => ({
@@ -310,6 +310,12 @@ export const useChatStore = create<ChatState>()(
                     : f
                 )
               : [],
+          }))
+        }
+        if (version < 2 && persisted?.conversations) {
+          persisted.conversations = persisted.conversations.map((c: any) => ({
+            ...c,
+            mode: c.mode ?? 'gourmet',
           }))
         }
         return persisted

@@ -127,7 +127,7 @@ model = ChatOpenAI(
     model="mimo-v2.5",
     openai_api_key=os.getenv('MIMO_API_KEY'),
     openai_api_base=os.getenv('MIMO_BASE_URL'),
-    max_tokens=4096,
+    max_tokens=8192,  # 周计划 21 餐 JSON 较长，加大上限避免被截断（仅是上限，普通回复不受影响）
     streaming=True,
 ).bind_tools(tools)
 
@@ -288,6 +288,17 @@ def _thread_has_history(thread_id: str) -> bool:
         return False
 
 
+_SEARCH_TOOLS = {"search_local_recipes", "search_recipe"}
+_PREF_TOOLS = {"save_preference", "forget_preference"}
+
+
+def _tool_names_in_update(chunk):
+    """从 updates 的 tools 块里取出本轮执行的工具名。"""
+    data = chunk.get("tools") or {}
+    msgs = data.get("messages") or []
+    return [getattr(m, "name", None) for m in msgs]
+
+
 def chat_stream(messages, thread_id=None, mode=None):
     """流式聊天 - 使用 LangGraph + checkpointer 记忆。
 
@@ -337,18 +348,23 @@ def chat_stream(messages, thread_id=None, mode=None):
         if last_user is not None:
             input_messages = [last_user]
 
-    # messages 模式实现逐 token 流式输出；updates 模式捕获工具节点，给出搜索提示
-    searched = False  # 一次回复里"正在搜索"最多提示一次（哪怕多轮调用工具）
+    # messages 模式实现逐 token 流式输出；updates 模式捕获工具节点，给出对应提示
+    shown = set()  # 已显示过的提示类别（搜索/偏好），每类最多一次
     for mode, chunk in graph.stream(
         {"messages": input_messages},
         config=config,
         stream_mode=["updates", "messages"],
     ):
         if mode == "updates":
-            # 工具节点执行后只提示一次，避免多次搜索冒出多个提示
-            if "tools" in chunk and not searched:
-                searched = True
-                yield "🔍 正在搜索菜谱...\n\n"
+            # 按本轮实际调用的工具给出准确提示，而不是一律"正在搜索"
+            if "tools" in chunk:
+                names = _tool_names_in_update(chunk)
+                if any(n in _SEARCH_TOOLS for n in names) and "search" not in shown:
+                    shown.add("search")
+                    yield "🔍 正在搜索菜谱...\n\n"
+                if any(n in _PREF_TOOLS for n in names) and "pref" not in shown:
+                    shown.add("pref")
+                    yield "📝 正在更新偏好...\n\n"
         elif mode == "messages":
             token, _metadata = chunk
             # 只输出 AI 生成的文本 token（跳过工具调用的空内容和工具返回结果）

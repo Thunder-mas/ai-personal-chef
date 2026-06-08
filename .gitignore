@@ -4,6 +4,9 @@
 # IDE配置
 .idea/
 
+# 本地 Claude Code 配置（个人机器设置，不入库）
+.claude/settings.local.json
+
 # Python缓存
 __pycache__/
 *.pyc
@@ -18,6 +21,9 @@ __pycache__/
 
 # LangGraph 对话记忆（运行时数据，会不断变大，不入库）
 resources/checkpoints.db
+
+# 业务数据库（含个人偏好/健身档案/饮食记录等隐私数据，首次运行自动创建，不入库）
+resources/personal_chief.db
 
 # RAG 向量缓存（由 data/recipes.json 自动重建，不入库）
 resources/recipe_vectors.npz

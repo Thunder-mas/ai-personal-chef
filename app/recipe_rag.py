@@ -53,10 +53,15 @@ def _embed(texts: List[str]) -> np.ndarray:
 
 def _recipe_to_text(r: Dict[str, Any]) -> str:
     """把一条菜谱拼成用于 embedding 的检索文本。
-    菜名 + 标签 + 描述 + 食材都纳入，能同时命中"菜名"和"我有什么食材"两类提问。"""
+    菜名 + 标签 + 营养属性 + 描述 + 食材都纳入，能同时命中"菜名""我有什么食材"
+    以及"增肌/降火/减脂/三高"这类营养与中医属性的提问。
+    （attrs 属性元数据是评测发现"语义盲区"后补的优化：纯向量匹配不到不在文本里的概念，
+      把结构化属性写进检索文本即可显著提升这类语义查询的召回。）"""
     parts = [r.get("name", "")]
     if r.get("tags"):
         parts.append("，".join(r["tags"]))
+    if r.get("attrs"):
+        parts.append("适合：" + "、".join(r["attrs"]))
     if r.get("description"):
         parts.append(r["description"])
     ingredients = r.get("ingredients", [])

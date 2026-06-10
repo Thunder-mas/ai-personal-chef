@@ -2,6 +2,7 @@
 import streamlit as st
 from app.agents.ai_chef import chat_stream
 from app.recipe_text import format_recipe_blocks, extract_first_recipe_name
+from app.preferences import init_pref_db, add_preference, get_preferences
 import base64
 import re
 import sqlite3
@@ -217,17 +218,13 @@ st.markdown("""
 
 # ==================== 初始化数据库 ====================
 def init_db():
+    # 只建 Streamlit 专用的收藏表；偏好表与其增删查由 app.preferences 统一管理，避免重复实现
     with sqlite3.connect('resources/personal_chief.db') as conn:
         c = conn.cursor()
         c.execute('''CREATE TABLE IF NOT EXISTS favorites (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             recipe_name TEXT,
             recipe_content TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )''')
-        c.execute('''CREATE TABLE IF NOT EXISTS preferences (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            preference TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )''')
 
@@ -237,24 +234,15 @@ def save_favorite(recipe_name, recipe_content):
         c.execute("INSERT INTO favorites (recipe_name, recipe_content) VALUES (?, ?)",
                   (recipe_name, recipe_content))
 
-def save_preference(preference):
-    with sqlite3.connect('resources/personal_chief.db') as conn:
-        c = conn.cursor()
-        c.execute("INSERT INTO preferences (preference) VALUES (?)", (preference,))
-
 def get_favorites():
     with sqlite3.connect('resources/personal_chief.db') as conn:
         c = conn.cursor()
         c.execute("SELECT recipe_name, created_at FROM favorites ORDER BY created_at DESC")
         return c.fetchall()
 
-def get_preferences():
-    with sqlite3.connect('resources/personal_chief.db') as conn:
-        c = conn.cursor()
-        c.execute("SELECT preference FROM preferences ORDER BY created_at DESC")
-        return [p[0] for p in c.fetchall()]
-
+# 偏好统一用 app.preferences（add_preference 会自动去重），不再本地重复实现
 init_db()
+init_pref_db()
 
 # ==================== 页面配置 ====================
 st.set_page_config(
@@ -433,7 +421,7 @@ if user_input:
             st.success(f"已收藏：{recipe_name or '菜谱'}")
 
         if re.search(r'(我(的)?偏好|我忌口|我不吃|过敏)', user_input):
-            save_preference(user_input)
+            add_preference(user_input)
             st.success("已记住你的偏好")
 
     except Exception as e:

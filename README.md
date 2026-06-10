@@ -81,7 +81,21 @@ flowchart TB
 - 📊 **今日饮食记录**：记录摄入，进度条对比每日目标
 - ❤️ **偏好记忆**：说一次"不吃香菜""对花生过敏"，之后推荐自动避开
 
-> 📸 截图占位（建议补上）：`docs/screenshots/` —— 聊天流式、菜谱卡、周计划课表、健身进度、拍照识别
+---
+
+## 📸 界面预览
+
+| 主界面 | 菜品卡片 | 一周食谱 |
+|---|---|---|
+| ![主界面](docs/screenshots/界面展示.png) | ![菜品卡片](docs/screenshots/菜品卡片.png) | ![一周食谱](docs/screenshots/周计划.png) |
+
+| 拍照识别食材 | 健身档案 | 每日营养目标 |
+|---|---|---|
+| ![拍照识别食材](docs/screenshots/图片识别.png) | ![健身档案](docs/screenshots/健身档案.png) | ![每日营养目标](docs/screenshots/每日热量.png) |
+
+| 运营数据看板 | 口味偏好 | 购物清单 |
+|---|---|---|
+| ![运营数据看板](docs/screenshots/数据看板.png) | ![口味偏好](docs/screenshots/口味偏好.png) | ![购物清单](docs/screenshots/购物清单.png) |
 
 ---
 
@@ -136,6 +150,24 @@ npm run dev        # 打开 http://localhost:5173
 
 > 前端通过 Vite 代理把 `/api` 转发到后端 `:8000`，本地直接联调。
 
+### 3. 一键 Docker 部署（上线推荐）
+
+```bash
+cp .env.example .env      # 填入密钥
+docker compose up -d --build
+# 浏览器打开 http://服务器IP —— 前端 nginx 已同源反代 /api 到后端
+```
+
+完整服务器部署步骤见 **[DEPLOY.md](DEPLOY.md)**。
+
+### 4. 评估与运营看板
+
+```bash
+python eval/run_eval.py            # RAG 检索评估 → eval/report.md
+python seed_demo_data.py           # 给看板灌演示数据
+streamlit run dashboard.py         # 运营数据看板
+```
+
 ---
 
 ## 📂 项目结构
@@ -149,12 +181,17 @@ app/
 ├── fitness.py          # 健身档案 + 每日宏量目标（循证计算）
 ├── food_log.py         # 今日饮食记录 + 进度
 ├── preferences.py      # 偏好记忆
+├── analytics.py        # 运营埋点 + 指标聚合 + Power BI 导出
 └── recipe_text.py      # 菜谱 JSON → 可读文本（CLI/Streamlit 用）
 api/server.py           # FastAPI：/api/chat(SSE) 及各业务接口
 data/recipes.json       # 本地菜谱知识库
+eval/                   # RAG 检索评估：测试集 + 脚本 + 报告
 frontend/               # React + TS 前端
+dashboard.py            # 运营数据看板（Streamlit）
+seed_demo_data.py       # 给看板灌演示数据
 main.py                 # CLI 入口
 streamlit_app.py        # Streamlit 入口
+Dockerfile / docker-compose.yml  # 一键容器化部署（详见 DEPLOY.md）
 ```
 
 ---
@@ -169,11 +206,38 @@ streamlit_app.py        # Streamlit 入口
 
 ---
 
+## 📈 工程化 & 产品化（不止于 Demo）
+
+把"能跑的 Demo"做成"能上线、能持续优化、能讲清怎么赚钱"的产品——这是生产级 AI 应用与玩具的分水岭。
+
+### ✅ 可量化的 RAG 评估闭环 · [`eval/`](eval/)
+- 44 条带标准答案的测试集，计算 **命中率 / 召回率 / 精确率 / MRR**，多 top-k 对比，并支持 **LLM-as-judge** 给结果打分。
+- **完整闭环：评估 → 优化 → 复测**。评测发现纯向量检索对"降火""适合孩子"这类不在文本里的营养/属性概念有盲区 → 给菜谱补结构化 `attrs` 元数据并纳入检索文本 → 同一评测集上 **Top-3 命中率从 95.5% 提升到 100%、MRR 0.92→0.95**，盲区查询全部修复（对照 `eval/report_before.md` 与 `eval/report.md`）。
+- 跑：`python eval/run_eval.py`（离线、约 10 秒，自动生成报告）。
+
+### 📊 运营可观测看板 · [`dashboard.py`](dashboard.py)
+- 全链路**埋点**（提问量、活跃用户 DAU、检索命中率、热门菜谱、联网兜底占比、模式偏好），写入独立事件库，且**全程 try 兜底、绝不影响主对话**。
+- **Streamlit 看板**实时呈现运营指标；事件可一键**导出 CSV 接入 Power BI**。
+- 跑：`python seed_demo_data.py` 灌演示数据 → `streamlit run dashboard.py`。
+
+### 🐳 一键容器化部署 · `Dockerfile` / `docker-compose.yml`
+- 前端 nginx 托管静态资源并**同源反代 `/api`**（免跨域），且为 **SSE 流式关闭代理缓冲**（否则逐字流会被缓冲成整段）；后端只在内网可见。
+- 一条命令上线：`docker compose up -d --build`。完整步骤见 **[DEPLOY.md](DEPLOY.md)**。
+
+### 💰 商业化设想（产品 / 市场视角）
+- **用户与痛点**：一人食 / 小家庭 / 健身控餐 / 厨房新手——"有食材不知道做啥""不会算营养配餐""每周不知道吃啥"。
+- **落地形态**：微信小程序 / 公众号（贴近 C 端流量与付费习惯）。
+- **变现路径**：① 会员订阅（拍照识别、营养师定制周计划）② 购物清单一键购的电商导购 **CPS 佣金** ③ 营养配餐 Agent 能力做成 **B 端 API**（健身 App / 团餐 / 月子中心）。
+- **运营指标**：DAU、次日留存、付费转化率、人均提问数、检索命中率（看板已覆盖前述指标）。
+
+---
+
 ## 🗺️ Roadmap
 
+- [x] **RAG 效果评估**（命中率 / 召回率 / MRR + LLM-as-judge）→ [`eval/`](eval/)
+- [x] **Docker 部署 + 在线 Demo** → [DEPLOY.md](DEPLOY.md)
+- [x] **运营埋点与数据看板** → [`dashboard.py`](dashboard.py)
 - [ ] 单元测试（pytest / vitest）与 CI
-- [ ] Docker 部署 + 在线 Demo
-- [ ] RAG / Agent 效果评估（检索召回率、LLM-as-judge）
 - [ ] 多用户与鉴权
 
 ---

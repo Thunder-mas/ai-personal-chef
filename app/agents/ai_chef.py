@@ -21,13 +21,15 @@ from app.preferences import add_preference, remove_preference, get_preferences, 
 from app.recipe_rag import search as rag_search
 from app.fitness import get_daily_targets, init_fitness_db
 from app.modes import get_mode_config, init_mode_db
+from app.analytics import init_analytics_db, log_turn, log_retrieval
 
 logger = logging.getLogger(__name__)
 
-# 确保偏好表、健身档案表、模式设置表存在
+# 确保偏好表、健身档案表、模式设置表、运营埋点表存在
 init_pref_db()
 init_fitness_db()
 init_mode_db()
+init_analytics_db()
 
 # ==================== 1. 定义 State ====================
 class AgentState(TypedDict):
@@ -96,6 +98,8 @@ def search_local_recipes(query: str) -> str:
         return "本地菜谱库暂时不可用，请改用 search_recipe 联网搜索。"
     if not hits:
         return "本地菜谱库没有相关结果。"
+    # 埋点：记录这次检索命中的 Top-1 菜谱与相似度（供运营看板统计热门菜谱/命中率）
+    log_retrieval(query, hits[0].get("name"), hits[0].get("_score"))
     # 去掉内部的相似度分，避免被写进给用户的菜谱 JSON
     clean = [{k: v for k, v in r.items() if k != "_score"} for r in hits]
     return json.dumps(clean, ensure_ascii=False)
@@ -313,11 +317,19 @@ def chat_stream(messages, thread_id=None, mode=None):
     # mode 放进 config，agent_node 据此按"每对话独立模式"构建系统提示
     config = {"configurable": {"thread_id": thread_id, "mode": mode}}
 
+    # 运营埋点用：下面的 for 循环会把 mode 变量覆盖成 stream 模式名，故先存一份请求模式
+    _req_mode = mode
+    _has_image = False
+    _used_local = False
+    _used_web = False
+    _log_query = ""
+
     # 视觉前置：最新用户消息若带图片，先用多模态模型识别食材，
     # 再把这条消息改写成纯文本喂给 agent（agent 用 mimo-v2.5，不处理图片）。
     if messages and messages[-1].get("role") == "user":
         image_urls, user_text = _split_images_and_text(messages[-1].get("content"))
         if image_urls:
+            _has_image = True
             yield "📷 正在识别食材...\n\n"
             try:
                 from app.vision import recognize_ingredients
@@ -336,6 +348,10 @@ def chat_stream(messages, thread_id=None, mode=None):
                 new_text = user_text or "请根据我的描述推荐菜谱。"
             # 用纯文本替换带图片的最新消息
             messages = messages[:-1] + [{"role": "user", "content": new_text}]
+
+    # 埋点用：记下本轮最终送入 agent 的用户文本
+    if messages and messages[-1].get("role") == "user" and isinstance(messages[-1].get("content"), str):
+        _log_query = messages[-1]["content"]
 
     input_messages = _to_lc_messages(messages)
 
@@ -359,6 +375,11 @@ def chat_stream(messages, thread_id=None, mode=None):
             # 按本轮实际调用的工具给出准确提示，而不是一律"正在搜索"
             if "tools" in chunk:
                 names = _tool_names_in_update(chunk)
+                # 埋点：记录本轮走了本地检索还是联网兜底
+                if "search_local_recipes" in names:
+                    _used_local = True
+                if "search_recipe" in names:
+                    _used_web = True
                 if any(n in _SEARCH_TOOLS for n in names) and "search" not in shown:
                     shown.add("search")
                     yield "🔍 正在搜索菜谱...\n\n"
@@ -370,3 +391,7 @@ def chat_stream(messages, thread_id=None, mode=None):
             # 只输出 AI 生成的文本 token（跳过工具调用的空内容和工具返回结果）
             if isinstance(token, AIMessageChunk) and token.content:
                 yield token.content
+
+    # 本轮结束：埋点记一条 turn（用 _req_mode，因为上面的循环变量 mode 已被覆盖）
+    log_turn(thread_id, _req_mode, _log_query,
+             has_image=_has_image, used_local=_used_local, used_web=_used_web)

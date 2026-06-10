@@ -1,0 +1,19 @@
+# 一条命令把"AI 私人厨师"整套拉起来：docker compose up -d --build
+# 前端 nginx 暴露 80 端口并反代 /api 到后端；后端只在内部网络可见。
+services:
+  backend:
+    build: .
+    env_file: .env                 # 注入 MIMO_API_KEY / MIMO_BASE_URL / TAVILY_API_KEY
+    volumes:
+      - ./resources:/app/resources # 持久化：对话记忆、偏好/健身库、埋点库、向量与模型缓存
+    expose:
+      - "8000"                     # 仅 compose 内网可见，不直接对公网开放
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "80:80"                    # 对外访问入口：http://服务器IP
+    depends_on:
+      - backend
+    restart: unless-stopped

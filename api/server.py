@@ -72,6 +72,9 @@ async def chat(request: ChatRequest):
     messages = [msg.model_dump() for msg in request.messages]
 
     def event_stream():
+        # 立即发一个 SSE 注释行，让前置网关/代理马上收到字节，避免它在后端"思考"
+        # 期间迟迟收不到响应而判定超时（504）。前端解析时会忽略以 ":" 开头的行。
+        yield ": connected\n\n"
         try:
             for chunk in chat_stream(messages, thread_id=request.thread_id, mode=request.mode):
                 yield f"data: {json.dumps({'type': 'chunk', 'content': chunk}, ensure_ascii=False)}\n\n"
@@ -79,7 +82,15 @@ async def chat(request: ChatRequest):
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'content': str(e)}, ensure_ascii=False)}\n\n"
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",   # 关键：告诉 nginx 类网关不要缓冲流式响应（治 SSE 被缓冲→504）
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @app.get("/api/preferences")

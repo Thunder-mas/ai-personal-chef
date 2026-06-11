@@ -35,6 +35,11 @@ COPY --chown=user --from=frontend /build/dist ./frontend/dist
 # 运行时 SQLite（埋点/对话记忆/偏好）写到这里，容器内可写
 RUN mkdir -p resources
 
-# HF Spaces Docker 默认端口 7860
+# 构建时"预热"：下载 embedding 模型并建好向量库，烤进镜像。
+# 这样运行时无需再下载模型 → 首次对话秒回，且绕开"运行时连 GCS 慢/不通"导致的超时。
+# 失败也不阻断构建（运行时会再尝试下载）。
+RUN python -m app.recipe_rag || echo "[warn] 预热模型失败，将在运行时再尝试下载"
+
+# 容器对外端口（HF Spaces / ModelScope Docker 创空间默认 7860）
 EXPOSE 7860
 CMD ["uvicorn", "api.server:app", "--host", "0.0.0.0", "--port", "7860"]

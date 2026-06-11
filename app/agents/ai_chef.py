@@ -79,11 +79,19 @@ system_prompt = """你是私人厨师。根据用户食材推荐菜谱。
 # ==================== 3. 定义 Tools ====================
 from langchain_tavily import TavilySearch
 
-_tavily_search = TavilySearch(
-    max_results=3,
-    topic='general',
-    tavily_api_key=os.getenv('TAVILY_API_KEY')
-)
+_tavily_search = None
+
+
+def _get_tavily():
+    # 懒加载：首次用到时才实例化；缺 TAVILY_API_KEY 时返回 None，
+    # 绝不在模块导入阶段抛错（否则整个服务起不来、云端部署直接发布失败）。
+    global _tavily_search
+    if _tavily_search is None:
+        key = os.getenv('TAVILY_API_KEY')
+        if not key:
+            return None
+        _tavily_search = TavilySearch(max_results=3, topic='general', tavily_api_key=key)
+    return _tavily_search
 
 @tool
 def search_local_recipes(query: str) -> str:
@@ -108,8 +116,14 @@ def search_local_recipes(query: str) -> str:
 @tool
 def search_recipe(query: str) -> str:
     """联网搜索菜谱（本地知识库没有合适结果时再用）。"""
-    result = _tavily_search.invoke(query)
-    return str(result)
+    tav = _get_tavily()
+    if tav is None:
+        return "联网搜索暂不可用（服务端未配置 TAVILY_API_KEY）。请优先使用本地菜谱库。"
+    try:
+        return str(tav.invoke(query))
+    except Exception as e:
+        logger.warning("联网搜索失败: %s", e)
+        return "联网搜索失败，请改用本地菜谱库。"
 
 @tool
 def save_preference(preference: str) -> str:

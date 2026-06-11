@@ -150,17 +150,7 @@ npm run dev        # 打开 http://localhost:5173
 
 > 前端通过 Vite 代理把 `/api` 转发到后端 `:8000`，本地直接联调。
 
-### 3. 一键 Docker 部署（上线推荐）
-
-```bash
-cp .env.example .env      # 填入密钥
-docker compose up -d --build
-# 浏览器打开 http://服务器IP —— 前端 nginx 已同源反代 /api 到后端
-```
-
-完整服务器部署步骤见 **[DEPLOY.md](DEPLOY.md)**。
-
-### 4. 评估与运营看板
+### 3. 评估与运营看板
 
 ```bash
 python eval/run_eval.py            # RAG 检索评估 → eval/report.md
@@ -191,12 +181,11 @@ dashboard.py            # 运营数据看板（Streamlit）
 seed_demo_data.py       # 给看板灌演示数据
 main.py                 # CLI 入口
 streamlit_app.py        # Streamlit 入口
-Dockerfile / docker-compose.yml  # 一键容器化部署（详见 DEPLOY.md）
 ```
 
 ---
 
-## 💡 技术亮点（面试可深入）
+## 💡 技术亮点
 
 - **从零实现 RAG**：归一化向量后用一次矩阵乘法做余弦相似度取 top-k，看得见检索的全部数学；针对国内网络做了模型离线缓存加固，并在检索失败时优雅回退联网搜索。
 - **LangGraph 对话记忆**：用 `add_messages` reducer + SqliteSaver checkpointer，按 `thread_id` 持久化整段对话，前端每轮只发增量、历史由后端恢复。
@@ -220,10 +209,6 @@ Dockerfile / docker-compose.yml  # 一键容器化部署（详见 DEPLOY.md）
 - **Streamlit 看板**实时呈现运营指标；事件可一键**导出 CSV 接入 Power BI**。
 - 跑：`python seed_demo_data.py` 灌演示数据 → `streamlit run dashboard.py`。
 
-### 🐳 一键容器化部署 · `Dockerfile` / `docker-compose.yml`
-- 前端 nginx 托管静态资源并**同源反代 `/api`**（免跨域），且为 **SSE 流式关闭代理缓冲**（否则逐字流会被缓冲成整段）；后端只在内网可见。
-- 一条命令上线：`docker compose up -d --build`。完整步骤见 **[DEPLOY.md](DEPLOY.md)**。
-
 ### 💰 商业化设想（产品 / 市场视角）
 - **用户与痛点**：一人食 / 小家庭 / 健身控餐 / 厨房新手——"有食材不知道做啥""不会算营养配餐""每周不知道吃啥"。
 - **落地形态**：微信小程序 / 公众号（贴近 C 端流量与付费习惯）。
@@ -235,8 +220,8 @@ Dockerfile / docker-compose.yml  # 一键容器化部署（详见 DEPLOY.md）
 ## 🗺️ Roadmap
 
 - [x] **RAG 效果评估**（命中率 / 召回率 / MRR + LLM-as-judge）→ [`eval/`](eval/)
-- [x] **Docker 部署 + 在线 Demo** → [DEPLOY.md](DEPLOY.md)
 - [x] **运营埋点与数据看板** → [`dashboard.py`](dashboard.py)
+- [ ] 在线 Demo（部署到 Streamlit Cloud / Hugging Face Spaces）
 - [ ] 单元测试（pytest / vitest）与 CI
 - [ ] 多用户与鉴权
 

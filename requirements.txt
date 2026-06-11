@@ -1,0 +1,13 @@
+# Streamlit Cloud 部署依赖（仅 streamlit_app.py 入口所需，精简版）
+# 说明：notebook / langgraph-cli / fastapi / uvicorn / dashscope 是给其它入口用的，
+#       本在线 Demo 不需要，故不列入，避免免费版因体积/内存部署失败。
+streamlit>=1.50.0
+numpy
+fastembed>=0.7.4
+openai>=1.6.1,<2.0.0
+python-dotenv>=1.0.1
+langchain-core>=0.3.86
+langchain-openai>=0.3.35
+langchain-tavily>=0.2.11
+langgraph>=0.6.11
+langgraph-checkpoint-sqlite>=2.0.11

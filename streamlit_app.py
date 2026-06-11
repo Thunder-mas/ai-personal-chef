@@ -1,5 +1,16 @@
 # app.py - Streamlit 界面（美化版）
+import os
 import streamlit as st
+
+# Streamlit Cloud 部署：把 st.secrets 中的密钥注入环境变量，
+# 使下游 os.getenv(...) 在云端也能读到（本地无 secrets.toml 时静默跳过，仍由 .env 提供）。
+try:
+    for _k in ("MIMO_API_KEY", "MIMO_BASE_URL", "TAVILY_API_KEY"):
+        if _k in st.secrets:
+            os.environ.setdefault(_k, str(st.secrets[_k]))
+except Exception:
+    pass
+
 from app.agents.ai_chef import chat_stream
 from app.recipe_text import format_recipe_blocks, extract_first_recipe_name
 from app.preferences import init_pref_db, add_preference, get_preferences

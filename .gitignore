@@ -35,6 +35,11 @@ resources/analytics_export.csv
 # 本地 embedding 模型缓存（约90MB 二进制，首次运行自动下载，不入库）
 resources/fastembed_cache/
 
+# 本地部署教程与生成脚本（含个人用户名/部署细节，仅本地参考，不入公开仓库）
+部署教程.md
+部署教程.docx
+make_docx.py
+
 # 系统文件
 .DS_Store
 Thumbs.db

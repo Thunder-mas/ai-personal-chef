@@ -1,8 +1,10 @@
 # api/server.py
 import json
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import List, Any, Optional
 
@@ -142,6 +144,17 @@ async def health():
     return {"status": "ok"}
 
 
+# ==================== 伺服前端（生产：单容器同源部署）====================
+# 若存在已构建的 React 产物（frontend/dist），由本服务同源伺服：
+#   - /api/* 路由在上方已注册，优先匹配；
+#   - 其余路径交给 StaticFiles，html=True 时 "/" 返回 index.html（单页应用）。
+# 本地用 Vite(5173) 开发时没有 dist，这里自动跳过，不影响联调。
+_DIST = Path(__file__).resolve().parents[1] / "frontend" / "dist"
+if _DIST.is_dir():
+    app.mount("/", StaticFiles(directory=str(_DIST), html=True), name="static")
+
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run(app, host="0.0.0.0", port=port)

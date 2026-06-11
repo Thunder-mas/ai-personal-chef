@@ -1,0 +1,21 @@
+# 构建上下文里不需要的东西（也避免把本地密钥/数据带进镜像）
+.git
+.venv
+__pycache__
+**/__pycache__
+*.pyc
+.env
+resources/*.db
+resources/*.csv
+frontend/node_modules
+frontend/dist
+docs
+eval
+logs
+images
+*.md
+!README.md
+test_mimo_stream.py
+dashboard.py
+seed_demo_data.py
+streamlit_app.py

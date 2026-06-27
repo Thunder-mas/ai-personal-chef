@@ -169,8 +169,35 @@ def chef_node(state: CrewState) -> Dict[str, Any]:
 
 
 # ==================== Node 3：采购 ====================
+def _combine_amounts(amounts: List[str]) -> str:
+    """合并同一食材的多份用量：
+    - 全是"数字+相同单位"(如 150g、150g)→ 相加(300g)；
+    - 非数字(少许/适量)→ 去重后用 + 连接(少许+少许 → 少许)；
+    - 混合 → 去重后 + 连接。"""
+    if not amounts:
+        return "适量"
+    total, unit, numeric = 0.0, None, True
+    for a in amounts:
+        m = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*([^\d\s]*)\s*", a)
+        if not m:
+            numeric = False
+            break
+        val, u = float(m.group(1)), m.group(2)
+        if unit is None:
+            unit = u
+        elif u != unit:
+            numeric = False
+            break
+        total += val
+    if numeric:
+        num = int(total) if total == int(total) else round(total, 2)
+        return f"{num}{unit}"
+    uniq = list(dict.fromkeys(a for a in amounts if a))  # 保序去重
+    return " + ".join(uniq) if uniq else "适量"
+
+
 def _merge_ingredients(menu: List[Dict[str, Any]]) -> List[Dict[str, str]]:
-    """把各菜的食材按名字去重合并（确定性逻辑，不靠模型，保证不漏不重）。"""
+    """把各菜的食材按名字合并（确定性逻辑，不靠模型，保证不漏不重）。"""
     merged: "Dict[str, List[str]]" = {}
     for dish in menu:
         for ing in dish.get("ingredients", []):
@@ -181,7 +208,7 @@ def _merge_ingredients(menu: List[Dict[str, Any]]) -> List[Dict[str, str]]:
             merged.setdefault(name, [])
             if amount:
                 merged[name].append(amount)
-    return [{"name": n, "amount": " + ".join(a) if a else "适量"} for n, a in merged.items()]
+    return [{"name": n, "amount": _combine_amounts(a)} for n, a in merged.items()]
 
 
 def procurement_node(state: CrewState) -> Dict[str, Any]:
@@ -201,7 +228,17 @@ def procurement_node(state: CrewState) -> Dict[str, Any]:
     grouped = _invoke_list(sys, human, "采购清单", base_temp=0.2, max_tokens=3072)
     if not grouped:
         # 分类失败兜底：不分类，整袋给出，保证功能可用
-        grouped = [{"category": "采购清单", "items": flat}]
+        return {"shopping_list": [{"category": "采购清单", "items": flat}]}
+
+    # 校验：LLM 归类时可能漏写/改名，把没被覆盖的食材补进"其他"，确保不丢项
+    covered = {
+        (it.get("name") or "").strip()
+        for g in grouped
+        for it in (g.get("items") or [])
+    }
+    missing = [i for i in flat if i["name"] not in covered]
+    if missing:
+        grouped.append({"category": "其他", "items": missing})
     return {"shopping_list": grouped}
 
 

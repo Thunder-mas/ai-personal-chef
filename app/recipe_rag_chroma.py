@@ -15,7 +15,7 @@ os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")  # 关掉 Chroma 匿名�
 
 import logging
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from app.recipe_rag import (
     load_recipes,
@@ -33,6 +33,15 @@ _COLLECTION = "recipes"
 
 _client = None
 _collection = None
+_recipes_cache: Optional[List[Dict[str, Any]]] = None  # 菜谱缓存：避免每次检索重读 recipes.json
+
+
+def _get_recipes() -> List[Dict[str, Any]]:
+    """菜谱列表（懒加载 + 缓存），与 numpy 后端一致，避免每次查询重读文件。"""
+    global _recipes_cache
+    if _recipes_cache is None:
+        _recipes_cache = load_recipes()
+    return _recipes_cache
 
 
 def _metadata(fp: str) -> dict:
@@ -63,7 +72,7 @@ def _get_collection():
     _CHROMA_DIR.mkdir(parents=True, exist_ok=True)
     _client = chromadb.PersistentClient(path=str(_CHROMA_DIR))
 
-    recipes = load_recipes()
+    recipes = _get_recipes()
     fp = fingerprint(recipes)
     col = _client.get_or_create_collection(name=_COLLECTION, metadata=_metadata(fp))
 
@@ -83,7 +92,7 @@ def _get_collection():
 def search(query: str, k: int = 3) -> List[Dict[str, Any]]:
     """Chroma 检索：返回与 query 最相近的 k 条菜谱，结构与 numpy 版一致（含 _score）。"""
     col = _get_collection()
-    recipes = load_recipes()
+    recipes = _get_recipes()
     q = embed_query(query)  # 复用带缓存的 query 向量
     res = col.query(query_embeddings=[q.tolist()], n_results=k)
     ids = res["ids"][0]
@@ -98,7 +107,8 @@ def search(query: str, k: int = 3) -> List[Dict[str, Any]]:
 
 def rebuild() -> int:
     """强制重建 Chroma 索引（编辑过 data/recipes.json 后可调用）。返回条数。"""
-    global _client, _collection
+    global _client, _collection, _recipes_cache
+    _recipes_cache = None  # 让菜谱缓存随重建刷新，picks up data/recipes.json 的改动
     import chromadb
 
     _CHROMA_DIR.mkdir(parents=True, exist_ok=True)

@@ -1,14 +1,16 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { PanelLeft, Search, Plus } from 'lucide-react'
 import { Sidebar } from './components/Layout/Sidebar'
 import { MainArea } from './components/Layout/MainArea'
-import { ShoppingListModal } from './components/ShoppingList/ShoppingListModal'
-import { PreferencesModal } from './components/Preferences/PreferencesModal'
-import { FitnessModal } from './components/Fitness/FitnessModal'
-import { FoodLogModal } from './components/FoodLog/FoodLogModal'
-import { MealPlanModal } from './components/MealPlan/MealPlanModal'
 import { useChatStore } from './store/useChatStore'
 import { useUIStore } from './store/useUIStore'
+
+// 弹窗按需加载：首屏不下载，点开时才拉对应 chunk
+const ShoppingListModal = lazy(() => import('./components/ShoppingList/ShoppingListModal').then((m) => ({ default: m.ShoppingListModal })))
+const PreferencesModal = lazy(() => import('./components/Preferences/PreferencesModal').then((m) => ({ default: m.PreferencesModal })))
+const FitnessModal = lazy(() => import('./components/Fitness/FitnessModal').then((m) => ({ default: m.FitnessModal })))
+const FoodLogModal = lazy(() => import('./components/FoodLog/FoodLogModal').then((m) => ({ default: m.FoodLogModal })))
+const MealPlanModal = lazy(() => import('./components/MealPlan/MealPlanModal').then((m) => ({ default: m.MealPlanModal })))
 
 function App() {
   const sidebarOpen = useUIStore((s) => s.sidebarOpen)
@@ -122,11 +124,13 @@ function App() {
         <MainArea />
       </div>
 
-      {shoppingListOpen && <ShoppingListModal />}
-      {preferencesOpen && <PreferencesModal />}
-      {fitnessOpen && <FitnessModal />}
-      {foodLogOpen && <FoodLogModal />}
-      {mealPlanOpen && <MealPlanModal />}
+      <Suspense fallback={null}>
+        {shoppingListOpen && <ShoppingListModal />}
+        {preferencesOpen && <PreferencesModal />}
+        {fitnessOpen && <FitnessModal />}
+        {foodLogOpen && <FoodLogModal />}
+        {mealPlanOpen && <MealPlanModal />}
+      </Suspense>
     </div>
   )
 }

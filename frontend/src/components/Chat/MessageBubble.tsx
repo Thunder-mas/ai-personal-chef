@@ -1,10 +1,10 @@
-import { useMemo } from 'react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import rehypeHighlight from 'rehype-highlight'
+import { lazy, Suspense, useMemo } from 'react'
 import type { Message, RecipeData, MealPlan } from '../../types/chat'
 import { RecipeCard } from './RecipeCard'
 import { MealPlanCard } from './MealPlanCard'
+
+// 懒加载 markdown 渲染（含大体积的代码高亮库），首屏不下载
+const Markdown = lazy(() => import('./Markdown'))
 
 interface MessageBubbleProps {
   message: Message
@@ -179,12 +179,9 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                 className="px-5 py-3.5 bg-[var(--bubble-ai)] rounded-2xl rounded-bl-md shadow-[var(--shadow)]"
               >
                 <div className="markdown-body">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    rehypePlugins={[rehypeHighlight]}
-                  >
-                    {seg.content}
-                  </ReactMarkdown>
+                  <Suspense fallback={<p className="whitespace-pre-wrap break-words">{seg.content}</p>}>
+                    <Markdown>{seg.content}</Markdown>
+                  </Suspense>
                 </div>
               </div>
             )

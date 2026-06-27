@@ -6,6 +6,7 @@ import { ShoppingListModal } from './components/ShoppingList/ShoppingListModal'
 import { PreferencesModal } from './components/Preferences/PreferencesModal'
 import { FitnessModal } from './components/Fitness/FitnessModal'
 import { FoodLogModal } from './components/FoodLog/FoodLogModal'
+import { MealPlanModal } from './components/MealPlan/MealPlanModal'
 import { useChatStore } from './store/useChatStore'
 import { useUIStore } from './store/useUIStore'
 
@@ -17,6 +18,7 @@ function App() {
   const preferencesOpen = useUIStore((s) => s.preferencesOpen)
   const fitnessOpen = useUIStore((s) => s.fitnessOpen)
   const foodLogOpen = useUIStore((s) => s.foodLogOpen)
+  const mealPlanOpen = useUIStore((s) => s.mealPlanOpen)
   const darkMode = useChatStore((s) => s.darkMode)
   const createNewChat = useChatStore((s) => s.createNewChat)
   const conversations = useChatStore((s) => s.conversations)
@@ -124,6 +126,7 @@ function App() {
       {preferencesOpen && <PreferencesModal />}
       {fitnessOpen && <FitnessModal />}
       {foodLogOpen && <FoodLogModal />}
+      {mealPlanOpen && <MealPlanModal />}
     </div>
   )
 }

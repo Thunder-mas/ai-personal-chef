@@ -3,6 +3,7 @@ import { isToday, isWithinInterval, subDays, startOfDay } from 'date-fns'
 import { PanelLeftClose, MoreHorizontal, Pencil, Trash2, Pin, Plus, Search, Heart, ShoppingCart, SlidersHorizontal, Dumbbell, Activity } from 'lucide-react'
 import { useChatStore } from '../../store/useChatStore'
 import { useUIStore } from '../../store/useUIStore'
+import { useMealPlanStore } from '../../store/useMealPlanStore'
 import { ThemeToggle } from '../common/ThemeToggle'
 import type { Conversation } from '../../types/chat'
 
@@ -52,6 +53,8 @@ export function Sidebar() {
   const viewFavorites = useUIStore((s) => s.viewFavorites)
   const setViewFavorites = useUIStore((s) => s.setViewFavorites)
   const openShoppingList = useUIStore((s) => s.openShoppingList)
+  const setMealPlanOpen = useUIStore((s) => s.setMealPlanOpen)
+  const mealPlanRunning = useMealPlanStore((s) => s.current?.status === 'running')
   const setPreferencesOpen = useUIStore((s) => s.setPreferencesOpen)
   const setFitnessOpen = useUIStore((s) => s.setFitnessOpen)
   const setFoodLogOpen = useUIStore((s) => s.setFoodLogOpen)
@@ -222,6 +225,27 @@ export function Sidebar() {
           >
             Ctrl + J
           </span>
+        </button>
+      </div>
+
+      {/* 智能配餐（多 Agent）入口 */}
+      <div className="px-3 mb-2">
+        <button
+          onClick={() => { setMealPlanOpen(true); setSidebarOpen(false) }}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all"
+          style={{ backgroundColor: 'var(--accent)', color: '#fff' }}
+          title="营养师→主厨→采购，多 Agent 协作配餐"
+        >
+          <span>✨</span>
+          <span>智能配餐</span>
+          {mealPlanRunning ? (
+            <span className="text-xs ml-auto flex items-center gap-1 opacity-90">
+              <span className="inline-block w-2 h-2 rounded-full bg-white animate-pulse" />
+              规划中
+            </span>
+          ) : (
+            <span className="text-xs ml-auto opacity-80">多 Agent</span>
+          )}
         </button>
       </div>
 

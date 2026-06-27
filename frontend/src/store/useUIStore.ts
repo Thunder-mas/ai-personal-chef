@@ -9,6 +9,7 @@ interface UIState {
   preferencesOpen: boolean
   fitnessOpen: boolean
   foodLogOpen: boolean
+  mealPlanOpen: boolean
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
   setViewFavorites: (v: boolean) => void
@@ -17,6 +18,7 @@ interface UIState {
   setPreferencesOpen: (open: boolean) => void
   setFitnessOpen: (open: boolean) => void
   setFoodLogOpen: (open: boolean) => void
+  setMealPlanOpen: (open: boolean) => void
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -27,6 +29,7 @@ export const useUIStore = create<UIState>((set) => ({
   preferencesOpen: false,
   fitnessOpen: false,
   foodLogOpen: false,
+  mealPlanOpen: false,
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   setViewFavorites: (v) => set({ viewFavorites: v }),
@@ -35,4 +38,5 @@ export const useUIStore = create<UIState>((set) => ({
   setPreferencesOpen: (open) => set({ preferencesOpen: open }),
   setFitnessOpen: (open) => set({ fitnessOpen: open }),
   setFoodLogOpen: (open) => set({ foodLogOpen: open }),
+  setMealPlanOpen: (open) => set({ mealPlanOpen: open }),
 }))

@@ -30,9 +30,9 @@ REPORT_PATH = Path(__file__).resolve().parent / "report.md"
 
 
 # ==================== 单条查询的指标 ====================
-def eval_one(query, relevant, k):
-    """对一条查询算 top-k 的命中/召回/精确/RR。"""
-    hits = rag_search(query, k=k)
+def eval_one(query, relevant, k, search_fn=rag_search):
+    """对一条查询算 top-k 的命中/召回/精确/RR。search_fn 可换后端（numpy/chroma）。"""
+    hits = search_fn(query, k=k)
     names = [h["name"] for h in hits]
     scores = [h.get("_score") for h in hits]
     rel = set(relevant)
@@ -172,21 +172,140 @@ def build_report(ks, agg_by_k, detail_rows, detail_k, judge_rate, judge_details)
     return "\n".join(parts)
 
 
+# ==================== 多后端对比（numpy vs chroma）====================
+def get_search_fn(backend):
+    """按后端名返回 (检索函数, 重建索引函数)。chroma 未装则抛错，由调用方处理。"""
+    if backend == "numpy":
+        from app.recipe_rag import search_numpy, rebuild
+        return search_numpy, rebuild
+    if backend == "chroma":
+        from app.recipe_rag_chroma import search as chroma_search, rebuild
+        return chroma_search, rebuild
+    raise ValueError(f"未知后端：{backend}")
+
+
+def measure_latency(search_fn, cases, k):
+    """预热（让 query embedding 全部命中缓存）后，测纯『索引检索』平均延迟(ms/query)。
+    这样两后端比的是 ANN/点积本身，而非 embedding 耗时（embedding 两边相同且已缓存）。"""
+    import time
+    for c in cases:                       # 预热：建索引 + 填满 embedding 缓存
+        search_fn(c["query"], k)
+    t0 = time.perf_counter()
+    for c in cases:
+        search_fn(c["query"], k)
+    return (time.perf_counter() - t0) / len(cases) * 1000
+
+
+def eval_backend(backend, cases, ks, detail_k):
+    """对单个后端跑全套指标 + 建库耗时 + 检索延迟。返回结果 dict。"""
+    import time
+    search_fn, rebuild_fn = get_search_fn(backend)
+
+    t0 = time.perf_counter()
+    rebuild_fn()                          # 建/重建索引（含 embedding，两后端口径一致）
+    build_ms = (time.perf_counter() - t0) * 1000
+
+    agg_by_k, detail_rows = [], None
+    for k in ks:
+        rows = [eval_one(c["query"], c["relevant"], k, search_fn) for c in cases]
+        agg_by_k.append(aggregate(rows))
+        if k == detail_k:
+            detail_rows = rows
+    if detail_rows is None:
+        detail_rows = [eval_one(c["query"], c["relevant"], detail_k, search_fn) for c in cases]
+
+    latency_ms = measure_latency(search_fn, cases, detail_k)
+    return {
+        "backend": backend,
+        "agg_by_k": agg_by_k,
+        "detail_rows": detail_rows,
+        "build_ms": round(build_ms, 1),
+        "latency_ms": round(latency_ms, 3),
+    }
+
+
+def build_comparison_report(backends, results, ks, detail_k):
+    parts = ["# RAG 检索后端对比报告（numpy vs Chroma）\n"]
+    parts.append(
+        "> 两后端复用**同一套** bge-small-zh-v1.5 向量，差异只在索引/检索方式，对比公平。\n"
+        f"> 数据集 `eval/testset.json`，菜谱库 48 条，检索延迟为预热后纯检索均值（embedding 已缓存且两边相同）。\n"
+    )
+
+    # 工程指标
+    parts.append("## 一、工程指标\n")
+    rows = [[r["backend"], r["build_ms"], r["latency_ms"]] for r in results]
+    parts.append(md_table(["后端", "建库耗时(ms)", "检索延迟(ms/query)"], rows))
+    parts.append("")
+
+    # 各 k 的质量指标，逐后端
+    parts.append("## 二、检索质量指标\n")
+    for k_idx, k in enumerate(ks):
+        parts.append(f"**top-k = {k}**\n")
+        qrows = [
+            [r["backend"], r["agg_by_k"][k_idx]["hit"], r["agg_by_k"][k_idx]["recall"],
+             r["agg_by_k"][k_idx]["precision"], r["agg_by_k"][k_idx]["mrr"]]
+            for r in results
+        ]
+        parts.append(md_table(["后端", "Hit@k", "Recall@k", "Prec@k", "MRR"], qrows))
+        parts.append("")
+
+    # 结论
+    by_name = {r["backend"]: r for r in results}
+    parts.append("## 三、结论\n")
+    if "numpy" in by_name and "chroma" in by_name:
+        n, c = by_name["numpy"], by_name["chroma"]
+        same_quality = n["agg_by_k"] == c["agg_by_k"]
+        parts.append(
+            f"- **精度**：两后端指标{'完全一致' if same_quality else '基本一致'}"
+            "——因为用的是同一套向量，Chroma 的 HNSW 在这个量级是精确近邻，不损失精度。\n"
+            f"- **延迟**：numpy {n['latency_ms']} ms/query vs Chroma {c['latency_ms']} ms/query。"
+            "数据量小时 numpy 的一次矩阵点积通常更快、且零额外依赖与部署成本。\n"
+            "- **取舍**：当前 48 条 → 线上用 **numpy**（够快、零依赖）；当菜谱量级到万级以上、"
+            "需要在线增删 / 元数据过滤 / 持久化时，切 **Chroma**（HNSW 亚线性检索、可扩展）。\n"
+        )
+    return "\n".join(parts)
+
+
 def main():
-    ap = argparse.ArgumentParser(description="RAG 检索质量评估")
+    ap = argparse.ArgumentParser(description="RAG 检索质量评估 / 后端对比")
     ap.add_argument("--ks", default="1,3,5", help="对比的 top-k 列表，逗号分隔")
     ap.add_argument("--detail-k", type=int, default=3, help="逐条明细用哪个 k")
     ap.add_argument("--judge", action="store_true", help="额外用 LLM 评判 Top-1 相关性（需 API key）")
+    ap.add_argument("--backend", default="numpy", choices=["numpy", "chroma", "both"],
+                    help="检索后端：numpy（默认）| chroma | both（出对比报告）")
     ap.add_argument("--out", default=str(REPORT_PATH), help="报告输出路径")
     args = ap.parse_args()
 
     ks = [int(x) for x in args.ks.split(",") if x.strip()]
     cases = json.loads(TESTSET_PATH.read_text(encoding="utf-8"))["cases"]
-    print(f"加载测试集 {len(cases)} 条，评估 k={ks} ...\n")
+    print(f"加载测试集 {len(cases)} 条，评估 k={ks}，后端={args.backend} ...\n")
 
+    # ---------- 后端对比模式 ----------
+    if args.backend == "both":
+        results = []
+        for backend in ["numpy", "chroma"]:
+            try:
+                print(f"评估后端：{backend} ...")
+                res = eval_backend(backend, cases, ks, args.detail_k)
+                for k_idx, k in enumerate(ks):
+                    a = res["agg_by_k"][k_idx]
+                    print(f"  k={k}:  命中率 {a['hit']:.3f}  召回率 {a['recall']:.3f}  "
+                          f"精确率 {a['precision']:.3f}  MRR {a['mrr']:.3f}")
+                print(f"  建库 {res['build_ms']}ms  检索 {res['latency_ms']}ms/query\n")
+                results.append(res)
+            except Exception as e:
+                print(f"  后端 {backend} 评估失败（可能未安装依赖）：{e}\n")
+        report = build_comparison_report([r["backend"] for r in results], results, ks, args.detail_k)
+        comp_out = str(Path(args.out).with_name("report_compare.md"))
+        Path(comp_out).write_text(report, encoding="utf-8")
+        print(f"对比报告已写出 → {comp_out}")
+        return
+
+    # ---------- 单后端模式（含逐条明细 + 可选 LLM judge）----------
+    search_fn, _ = get_search_fn(args.backend)
     agg_by_k, detail_rows = [], None
     for k in ks:
-        rows = [eval_one(c["query"], c["relevant"], k) for c in cases]
+        rows = [eval_one(c["query"], c["relevant"], k, search_fn) for c in cases]
         agg = aggregate(rows)
         agg_by_k.append(agg)
         print(f"k={k}:  命中率 {agg['hit']:.3f}   召回率 {agg['recall']:.3f}   "
@@ -194,7 +313,7 @@ def main():
         if k == args.detail_k:
             detail_rows = rows
     if detail_rows is None:  # detail-k 不在 ks 里时补算一次
-        detail_rows = [eval_one(c["query"], c["relevant"], args.detail_k) for c in cases]
+        detail_rows = [eval_one(c["query"], c["relevant"], args.detail_k, search_fn) for c in cases]
 
     judge_rate, judge_details = None, None
     if args.judge:

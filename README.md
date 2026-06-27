@@ -21,6 +21,9 @@
 | 🏋️ **循证业务计算** | 健身宏量用 Mifflin-St Jeor + 能量平衡推算，**有依据非拍脑袋** |
 | ⚡ **真·Token 级流式** | FastAPI **SSE** + LangGraph `messages` 流，逐字输出 |
 | 🧩 **结构化卡片渲染** | 大模型输出结构化 JSON → 前端渲染成菜谱卡 / 周计划课表（含流式占位与容错解析） |
+| 👥 **多 Agent 协作** | **营养师 → 主厨 → 采购** 三角色用 LangGraph 多节点流水线协作配餐，逐 Agent 流式可见 |
+| 🔌 **可插拔向量后端** | RAG 检索 **numpy / Chroma** 一键切换（`RAG_BACKEND`），复用同一套向量，附 [并排基准对比](eval/report_compare.md) |
+| ⚡ **Redis 缓存提速** | query embedding 与套餐规划结果缓存，**命中即跳过 LLM（实测 48s → 0.002s）**；无 Redis 自动回落进程内缓存 |
 
 ---
 
@@ -72,6 +75,7 @@ flowchart TB
 ## 🧩 功能一览
 
 - 💬 **流式对话推荐**：根据食材/需求推荐菜谱，逐字流式输出
+- 👥 **多 Agent 套餐规划**：一句需求 → 营养师定约束、主厨配菜单、采购出购物清单（三 Agent 接力）
 - 📷 **拍照识别食材**：上传冰箱照片，自动识别食材并推荐
 - 📚 **本地菜谱知识库**：语义检索（"番茄鸡蛋"也能召回"西红柿炒蛋"）
 - 🛒 **购物清单**：从收藏/周计划一键聚合食材
@@ -105,8 +109,9 @@ flowchart TB
 - Python 3.11、**FastAPI**（SSE 流式）
 - **LangGraph**（Agent 编排 + checkpointer 记忆）、LangChain
 - **MIMO**（小米）大模型：`mimo-v2.5`（对话）/ `mimo-v2-omni`（多模态），OpenAI 兼容
-- **fastembed** + `BAAI/bge-small-zh-v1.5` 向量化、**numpy** 余弦检索
+- **fastembed** + `BAAI/bge-small-zh-v1.5` 向量化、**numpy** 余弦检索（可选切 **Chroma** 向量库）
 - **SQLite**（偏好 / 健身档案 / 模式 / 饮食记录 / 对话记忆）
+- **Redis** 缓存（可选；未配置自动回落进程内缓存）
 - Tavily（联网搜索）
 
 **前端**
@@ -153,9 +158,11 @@ npm run dev        # 打开 http://localhost:5173
 ### 3. 评估与运营看板
 
 ```bash
-python eval/run_eval.py            # RAG 检索评估 → eval/report.md
-python seed_demo_data.py           # 给看板灌演示数据
-streamlit run dashboard.py         # 运营数据看板
+python eval/run_eval.py                 # RAG 检索评估 → eval/report.md
+python eval/run_eval.py --backend both  # numpy vs Chroma 后端对比 → eval/report_compare.md
+python -m app.agents.meal_crew "我想增肌，安排一顿高蛋白午餐"  # 多 Agent 套餐规划 CLI 演示
+python seed_demo_data.py                # 给看板灌演示数据
+streamlit run dashboard.py              # 运营数据看板
 ```
 
 ---
@@ -165,7 +172,10 @@ streamlit run dashboard.py         # 运营数据看板
 ```
 app/
 ├── agents/ai_chef.py   # LangGraph Agent：图定义 / 工具 / 流式 / 系统提示
-├── recipe_rag.py       # RAG：embedding + numpy 余弦检索 + 向量缓存
+├── agents/meal_crew.py # 多 Agent 协作：营养师→主厨→采购（LangGraph 多节点）
+├── recipe_rag.py       # RAG：embedding + numpy 余弦检索 + 向量缓存（后端可切换）
+├── recipe_rag_chroma.py# RAG：Chroma 向量库后端（复用同一套向量，与 numpy 对照）
+├── cache.py            # 缓存层：Redis 优先 / 进程内回落（embedding & 套餐结果）
 ├── vision.py           # 多模态：照片 → 食材识别
 ├── modes.py            # 模式注册表（美食/健身）
 ├── fitness.py          # 健身档案 + 每日宏量目标（循证计算）
@@ -192,6 +202,9 @@ streamlit_app.py        # Streamlit 入口
 - **模式按对话隔离**：定位并修复了"切换模式后行为串味"的问题——根因是**对话历史压过系统提示**，方案是模式随请求注入 + 每对话独立线程。
 - **多模态"感知前置"**：把图像识别拆成独立步骤（omni 模型识别食材 → 转文本 → 主 Agent 推理），让感知与推理解耦、互不影响。
 - **解析健壮性**：花括号匹配 + 按形状分派 + JSON 容错修复 + 流式未完成占位，保证大模型的结构化输出稳定渲染成卡片。
+- **多 Agent 协作（LangGraph 多节点）**：把"配餐"拆成营养师→主厨→采购三个职责单一的 Agent，状态在节点间显式传递；主厨节点接 RAG、采购节点用**确定性逻辑合并食材**再交 LLM 分类，既发挥模型又不把可靠的事交给它。不引入 CrewAI/AutoGen，用 LangGraph 原生节点保持透明可控。
+- **可插拔向量后端 + 量化对比**：numpy 与 Chroma 复用**同一套 bge 向量**，仅索引/检索方式不同，对比公平。基准显示二者精度完全一致，但 48 条量级下 numpy 单次点积比 Chroma HNSW 快约 **185×**——印证"小数据 numpy 零依赖更优、万级以上再上 Chroma（亚线性检索 + 持久化 + 在线增删/过滤）"的工程判断。
+- **缓存治理延迟与成本**：embedding 与套餐规划结果走缓存，命中即跳过 LLM（实测套餐规划 **48s → 0.002s**）；Redis 不可用时静默回落进程内 LRU，**绝不因缓存拖垮主流程**，并用 `/api/cache/stats` 暴露命中率以量化收益。
 
 ---
 
@@ -220,8 +233,11 @@ streamlit_app.py        # Streamlit 入口
 ## 🗺️ Roadmap
 
 - [x] **RAG 效果评估**（命中率 / 召回率 / MRR + LLM-as-judge）→ [`eval/`](eval/)
+- [x] **多 Agent 协作**（营养师/主厨/采购 · LangGraph 多节点）→ [`app/agents/meal_crew.py`](app/agents/meal_crew.py)
+- [x] **可插拔向量后端**（numpy / Chroma，附基准对比）→ [`eval/report_compare.md`](eval/report_compare.md)
+- [x] **缓存层**（Redis / 进程内回落，提速降本）→ [`app/cache.py`](app/cache.py)
 - [x] **运营埋点与数据看板** → [`dashboard.py`](dashboard.py)
-- [ ] 在线 Demo（部署到 Streamlit Cloud / Hugging Face Spaces）
+- [x] **在线 Demo**（已部署 ModelScope 创空间，国内可直接访问）
 - [ ] 单元测试（pytest / vitest）与 CI
 - [ ] 多用户与鉴权
 

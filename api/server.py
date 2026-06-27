@@ -13,10 +13,12 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.agents.ai_chef import chat_stream
+from app.agents.meal_crew import crew_stream
 from app.preferences import get_preferences, add_preference, remove_preference
 from app.fitness import get_profile, save_profile, get_daily_targets
 from app.modes import get_mode, set_mode, list_modes
 from app.food_log import get_day_summary, add_entry, delete_entry
+from app.cache import get_cache
 
 app = FastAPI(title="AI Personal Chef API")
 
@@ -58,6 +60,10 @@ class ModeRequest(BaseModel):
     mode: str            # gourmet / fitness / ...
 
 
+class MealPlanRequest(BaseModel):
+    request: str         # 用户的配餐需求（多 Agent 套餐规划用）
+
+
 class FoodEntryRequest(BaseModel):
     name: str
     calories: float = 0
@@ -91,6 +97,34 @@ async def chat(request: ChatRequest):
             "Connection": "keep-alive",
         },
     )
+
+
+@app.post("/api/meal-plan")
+async def meal_plan(request: MealPlanRequest):
+    """多 Agent 套餐规划（营养师→主厨→采购），逐个 Agent 的产出以 SSE 流式返回。"""
+    def event_stream():
+        yield ": connected\n\n"   # 立即发字节，避免网关在后端思考期间判超时（同 /api/chat）
+        try:
+            for event in crew_stream(request.request):
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'content': str(e)}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+@app.get("/api/cache/stats")
+async def cache_stats():
+    """缓存命中情况（后端 redis/memory、命中率）—— 量化缓存对延迟/成本的收益。"""
+    return get_cache().stats()
 
 
 @app.get("/api/preferences")

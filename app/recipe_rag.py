@@ -13,10 +13,13 @@ os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
 
 import json
 import hashlib
+import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 # ==================== 路径与模型 ====================
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -49,6 +52,20 @@ def _embed(texts: List[str]) -> np.ndarray:
     vecs = np.array(list(_get_embedder().embed(texts)), dtype=np.float32)
     norms = np.linalg.norm(vecs, axis=1, keepdims=True)
     return vecs / np.clip(norms, 1e-8, None)
+
+
+def embed_query(query: str) -> np.ndarray:
+    """单条 query 的归一化向量，带缓存：相同 query 直接命中，省掉一次 embedding 计算与延迟。
+    缓存后端为 Redis（配 REDIS_URL 时）或进程内回落，详见 app/cache.py。"""
+    from app.cache import get_cache, make_key
+    cache = get_cache()
+    key = "emb:" + make_key(_MODEL_NAME, query)
+    cached = cache.get_bytes(key)
+    if cached is not None:
+        return np.frombuffer(cached, dtype=np.float32)
+    vec = _embed([query])[0]
+    cache.set_bytes(key, vec.astype(np.float32).tobytes())
+    return vec
 
 
 def _recipe_to_text(r: Dict[str, Any]) -> str:
@@ -105,10 +122,10 @@ def _ensure_index(force: bool = False) -> None:
 
 
 # ==================== 检索（对外接口）====================
-def search(query: str, k: int = 3) -> List[Dict[str, Any]]:
-    """RAG 检索：返回与 query 语义最相近的 k 条菜谱，每条附 _score 相似度。"""
+def _search_numpy(query: str, k: int = 3) -> List[Dict[str, Any]]:
+    """numpy 后端：query 向量与全量矩阵做一次点积取 top-k。小数据下零依赖、足够快。"""
     _ensure_index()
-    q = _embed([query])[0]              # (dim,)
+    q = embed_query(query)             # (dim,)，带缓存
     scores = _matrix @ q               # (N,) 每条菜谱与 query 的余弦相似度
     top_idx = np.argsort(scores)[::-1][:k]
     results = []
@@ -117,6 +134,29 @@ def search(query: str, k: int = 3) -> List[Dict[str, Any]]:
         recipe["_score"] = round(float(scores[int(i)]), 3)
         results.append(recipe)
     return results
+
+
+def search(query: str, k: int = 3) -> List[Dict[str, Any]]:
+    """RAG 检索统一入口：返回与 query 最相近的 k 条菜谱，每条附 _score 相似度。
+    后端由环境变量 RAG_BACKEND 决定：numpy（默认）| chroma。
+    chroma 不可用（未安装/出错）时自动回落 numpy，保证线上稳定。"""
+    backend = os.getenv("RAG_BACKEND", "numpy").lower()
+    if backend == "chroma":
+        try:
+            from app.recipe_rag_chroma import search as _chroma_search
+            return _chroma_search(query, k)
+        except Exception as e:
+            logger.warning("Chroma 后端不可用，回落 numpy：%s", e)
+    return _search_numpy(query, k)
+
+
+# ---- 评测/对照脚本与 chroma 后端复用的显式入口（保证两版用同一套向量，对比公平）----
+search_numpy = _search_numpy
+load_recipes = _load_recipes
+recipe_to_text = _recipe_to_text
+fingerprint = _fingerprint
+embed_texts = _embed
+get_embedder = _get_embedder
 
 
 def rebuild() -> int:

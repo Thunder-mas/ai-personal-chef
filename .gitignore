@@ -28,6 +28,9 @@ resources/personal_chief.db
 # RAG 向量缓存（由 data/recipes.json 自动重建，不入库）
 resources/recipe_vectors.npz
 
+# Chroma 向量库（chroma 后端的持久化目录，由 data/recipes.json 自动重建，不入库）
+resources/chroma_db/
+
 # 运营埋点数据库与导出（运行时生成，含使用数据，不入库）
 resources/analytics.db
 resources/analytics_export.csv

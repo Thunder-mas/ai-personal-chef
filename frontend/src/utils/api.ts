@@ -32,8 +32,9 @@ export interface MealPlanResult {
 }
 
 // 后端 /api/meal-plan 逐 Agent 推送的 SSE 事件
+// nutrition_delta：营养师段的逐 token 增量(content 为单个 token 文本)
 export interface MealPlanEvent {
-  type: 'start' | 'cached' | 'nutrition' | 'menu' | 'shopping' | 'done' | 'error'
+  type: 'start' | 'cached' | 'nutrition_delta' | 'nutrition' | 'menu' | 'shopping' | 'done' | 'error'
   content?: string | MealDish[] | ShoppingGroup[]
   retrieved?: string[]
   result?: MealPlanResult

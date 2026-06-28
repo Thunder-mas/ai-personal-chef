@@ -20,6 +20,7 @@ export interface MealPlanView {
   status: 'running' | 'done' | 'error'
   cached: boolean
   nutrition_brief: string
+  nutritionDone: boolean // 营养师是否产出终稿(token 流式时用它区分"流式中"与"已完成")
   menu: MealDish[]
   retrieved: string[]
   shopping_list: ShoppingGroup[]
@@ -69,6 +70,7 @@ export const useMealPlanStore = create<MealPlanState>()(
             status: 'running',
             cached: false,
             nutrition_brief: '',
+            nutritionDone: false,
             menu: [],
             retrieved: [],
             shopping_list: [],
@@ -86,7 +88,13 @@ export const useMealPlanStore = create<MealPlanState>()(
         try {
           for await (const ev of streamMealPlan(req, controller.signal)) {
             if (ev.type === 'cached') patch({ cached: true })
-            else if (ev.type === 'nutrition') patch({ nutrition_brief: (ev.content as string) || '' })
+            else if (ev.type === 'nutrition_delta') {
+              const tok = (ev.content as string) || ''
+              set((s) => (s.current && s.current.request === req && s.current.status === 'running'
+                ? { current: { ...s.current, nutrition_brief: s.current.nutrition_brief + tok } }
+                : {}))
+            }
+            else if (ev.type === 'nutrition') patch({ nutrition_brief: (ev.content as string) || '', nutritionDone: true })
             else if (ev.type === 'menu') patch({ menu: (ev.content as MealDish[]) || [], retrieved: ev.retrieved || [] })
             else if (ev.type === 'shopping') patch({ shopping_list: (ev.content as ShoppingGroup[]) || [] })
             else if (ev.type === 'done' && ev.result) {
@@ -158,6 +166,7 @@ export const useMealPlanStore = create<MealPlanState>()(
             status: 'done',
             cached: false,
             nutrition_brief: rec.nutrition_brief,
+            nutritionDone: true,
             menu: rec.menu,
             retrieved: rec.retrieved,
             shopping_list: rec.shopping_list,

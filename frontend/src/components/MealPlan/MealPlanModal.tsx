@@ -102,15 +102,18 @@ export function MealPlanModal() {
   const started = !!current
 
   const nutrition = current?.nutrition_brief ?? ''
+  const nutritionDone = current?.nutritionDone ?? false
   const menu = current?.menu ?? []
   const retrieved = current?.retrieved ?? []
   const shopping = current?.shopping_list ?? []
   const cached = current?.cached ?? false
   const error = current?.status === 'error' ? current.error : null
 
-  // 三个 Agent 的状态由 current 的产出推导
-  const nutritionStatus: StageStatus = nutrition ? 'done' : running ? 'active' : 'pending'
-  const menuStatus: StageStatus = menu.length ? 'done' : running && nutrition ? 'active' : 'pending'
+  // 三个 Agent 的状态由 current 的产出推导。
+  // 营养师用 nutritionDone（而非文本是否非空）区分"流式中/已完成"：
+  // token 流式时文本已非空但未定稿，此时应继续转圈，定稿后才打勾。
+  const nutritionStatus: StageStatus = nutritionDone ? 'done' : running ? 'active' : 'pending'
+  const menuStatus: StageStatus = menu.length ? 'done' : running && nutritionDone ? 'active' : 'pending'
   const shoppingStatus: StageStatus = shopping.length ? 'done' : running && menu.length ? 'active' : 'pending'
 
   const run = () => {

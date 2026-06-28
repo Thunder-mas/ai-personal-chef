@@ -22,7 +22,7 @@ import json
 import logging
 from typing import TypedDict, List, Dict, Any
 
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessageChunk
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, END
 
@@ -50,13 +50,14 @@ class CrewState(TypedDict):
 # ==================== LLM ====================
 # 注意：mimo-v2.5 是推理模型，会先消耗 reasoning_tokens 再产出正文。
 # max_tokens 必须给足（推理 + 正文都算在内），否则正文会被截断甚至为空。
-def _llm(temperature: float = 0.4, max_tokens: int = 4096) -> ChatOpenAI:
+def _llm(temperature: float = 0.4, max_tokens: int = 4096, streaming: bool = False) -> ChatOpenAI:
     return ChatOpenAI(
         model="mimo-v2.5",
         openai_api_key=os.getenv("MIMO_API_KEY"),
         openai_api_base=os.getenv("MIMO_BASE_URL"),
         temperature=temperature,
         max_tokens=max_tokens,
+        streaming=streaming,  # 营养师段开启，便于 LangGraph messages 模式逐 token 流式
     )
 
 
@@ -129,7 +130,7 @@ def nutritionist_node(state: CrewState) -> Dict[str, Any]:
         "只输出 4-6 行要点，简洁、可执行，不要寒暄、不要写菜谱。"
     ))
     human = HumanMessage(content=f"用户需求：{state['request']}\n\n背景信息：\n" + "\n".join(ctx))
-    resp = _llm(temperature=0.3, max_tokens=3072).invoke([sys, human])
+    resp = _llm(temperature=0.3, max_tokens=3072, streaming=True).invoke([sys, human])
     brief = (resp.content or "").strip()
     if not brief:
         # 极端兜底：营养师为空时给通用约束，保证下游主厨/采购不受影响
@@ -308,17 +309,28 @@ def crew_stream(request: str):
 
     yield {"type": "start", "content": "🧑‍⚕️ 营养师 → 👨‍🍳 主厨 → 🛒 采购，多 Agent 协作中..."}
     acc: Dict[str, Any] = {}
-    # stream_mode="updates"：每个节点跑完推一次它的状态增量，真正逐 Agent 可见
-    for chunk in _graph.stream({"request": request}, stream_mode="updates"):
-        for node, delta in chunk.items():
-            acc.update(delta)
-            if node == "nutritionist":
-                yield {"type": "nutrition", "content": delta.get("nutrition_brief", "")}
-            elif node == "chef":
-                yield {"type": "menu", "content": delta.get("menu", []),
-                       "retrieved": delta.get("retrieved", [])}
-            elif node == "procurement":
-                yield {"type": "shopping", "content": delta.get("shopping_list", [])}
+    # 双模式流：
+    #   "messages" → 营养师节点的逐 token 文本(改善体感，让用户立刻看到在动)；
+    #   "updates"  → 每个节点跑完的最终产出(营养师终稿 / 主厨菜单 / 采购清单)。
+    # 主厨/采购是 JSON，逐 token 没法渲染成卡片，故只对营养师做 token 流。
+    for mode, chunk in _graph.stream(
+        {"request": request}, stream_mode=["updates", "messages"]
+    ):
+        if mode == "messages":
+            token, meta = chunk
+            if (meta or {}).get("langgraph_node") == "nutritionist" \
+                    and isinstance(token, AIMessageChunk) and token.content:
+                yield {"type": "nutrition_delta", "content": token.content}
+        elif mode == "updates":
+            for node, delta in chunk.items():
+                acc.update(delta)
+                if node == "nutritionist":
+                    yield {"type": "nutrition", "content": delta.get("nutrition_brief", "")}
+                elif node == "chef":
+                    yield {"type": "menu", "content": delta.get("menu", []),
+                           "retrieved": delta.get("retrieved", [])}
+                elif node == "procurement":
+                    yield {"type": "shopping", "content": delta.get("shopping_list", [])}
 
     out = _assemble(request, acc, cached=False)
     cache.set_json(key, out)
@@ -333,13 +345,21 @@ if __name__ == "__main__":
         pass
     req = " ".join(sys.argv[1:]) or "我想增肌，帮我规划接下来两天的午晚餐"
     print(f"\n=== 需求：{req} ===\n")
+    nutri_started = False
     for ev in crew_stream(req):
         t = ev["type"]
         if t == "start" or t == "cached":
             print(ev["content"], "\n")
+        elif t == "nutrition_delta":
+            if not nutri_started:
+                print("🧑‍⚕️ 营养师：")
+                nutri_started = True
+            print(ev["content"], end="", flush=True)
         elif t == "nutrition":
-            print("🧑‍⚕️ 营养师：")
-            print("  " + ev["content"].replace("\n", "\n  "), "\n")
+            if not nutri_started:  # 缓存命中等无 token 流的情况：整段打印
+                print("🧑‍⚕️ 营养师：")
+                print("  " + ev["content"].replace("\n", "\n  "))
+            print()  # 收尾换行
         elif t == "menu":
             print("👨‍🍳 主厨菜单：")
             for d in ev["content"]:

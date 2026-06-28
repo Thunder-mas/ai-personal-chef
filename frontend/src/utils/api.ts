@@ -1,4 +1,4 @@
-import type { Message } from '../types/chat'
+import type { Message, RecipeData } from '../types/chat'
 
 interface StreamChunk {
   type: 'chunk' | 'done' | 'error'
@@ -86,6 +86,55 @@ export async function* streamMealPlan(
       }
     }
   }
+}
+
+// 点击配餐里某道菜 → 取它的完整菜谱卡。后端可能命中本地菜谱库(即时)或 LLM 现编。
+export interface RecipeCardResult extends RecipeData {
+  _source?: 'local' | 'ai' // 本地真实菜谱 / AI 生成
+  _cached?: boolean
+}
+
+export async function getRecipe(
+  name: string,
+  ingredients?: MealIngredient[],
+  notes?: string,
+  signal?: AbortSignal
+): Promise<RecipeCardResult> {
+  const response = await fetch('/api/recipe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, ingredients, notes }),
+    signal,
+  })
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+  const body = response.body
+  if (!body) throw new Error('Response body is null')
+
+  const reader = body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  // SSE：忽略 ": connected" 心跳与 progress 事件，只在拿到 recipe 时返回
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() || ''
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      let ev: { type: string; recipe?: RecipeCardResult; content?: string }
+      try {
+        ev = JSON.parse(line.slice(6))
+      } catch (e) {
+        if (e instanceof SyntaxError) continue
+        throw e
+      }
+      if (ev.type === 'error') throw new Error(ev.content || '生成失败')
+      if (ev.type === 'recipe' && ev.recipe) return ev.recipe
+    }
+  }
+  throw new Error('未收到菜谱数据')
 }
 
 export async function* streamChat(

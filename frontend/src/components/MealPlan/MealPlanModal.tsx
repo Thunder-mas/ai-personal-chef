@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
-import { X, Copy, Check, Plus, Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { X, Copy, Check, Plus, Trash2, ChevronRight } from 'lucide-react'
 import { useUIStore } from '../../store/useUIStore'
 import { useMealPlanStore } from '../../store/useMealPlanStore'
-import type { ShoppingGroup } from '../../utils/api'
+import { getRecipe } from '../../utils/api'
+import type { MealDish, ShoppingGroup, RecipeCardResult } from '../../utils/api'
+import { RecipeCard } from '../Chat/RecipeCard'
 
 type StageStatus = 'pending' | 'active' | 'done'
 
@@ -85,6 +87,63 @@ export function MealPlanModal() {
 
   const [request, setRequest] = useState('')
   const [copied, setCopied] = useState(false)
+
+  // 点击主厨菜单里某道菜 → 弹出完整菜谱卡
+  const [activeDish, setActiveDish] = useState<MealDish | null>(null)
+  const [recipe, setRecipe] = useState<RecipeCardResult | null>(null)
+  const [recipeLoading, setRecipeLoading] = useState(false)
+  const [recipeError, setRecipeError] = useState<string | null>(null)
+  const recipeCache = useRef<Map<string, RecipeCardResult>>(new Map()) // 同名菜本会话内只取一次
+  const recipeAbort = useRef<AbortController | null>(null)
+
+  // 卸载(整个 Modal 关闭)时中断仍在生成的菜谱请求，避免对已卸载组件 setState
+  useEffect(() => () => recipeAbort.current?.abort(), [])
+
+  const openDish = (dish: MealDish) => {
+    recipeAbort.current?.abort()
+    recipeAbort.current = null
+    setActiveDish(dish)
+    setRecipeError(null)
+
+    const cached = recipeCache.current.get(dish.name)
+    if (cached) {
+      setRecipe(cached)
+      setRecipeLoading(false)
+      return
+    }
+    setRecipe(null)
+    setRecipeLoading(true)
+    const controller = new AbortController()
+    recipeAbort.current = controller
+    getRecipe(dish.name, dish.ingredients, dish.reason, controller.signal)
+      .then((r) => {
+        if (controller.signal.aborted) return
+        recipeCache.current.set(dish.name, r)
+        setRecipe(r)
+        setRecipeLoading(false)
+      })
+      .catch((e) => {
+        if (e instanceof DOMException && e.name === 'AbortError') return
+        setRecipeError(e instanceof Error ? e.message : '生成失败')
+        setRecipeLoading(false)
+      })
+  }
+
+  const closeDish = () => {
+    recipeAbort.current?.abort()
+    recipeAbort.current = null
+    setActiveDish(null)
+    setRecipe(null)
+    setRecipeLoading(false)
+    setRecipeError(null)
+  }
+
+  const retryDish = () => {
+    if (activeDish) {
+      recipeCache.current.delete(activeDish.name)
+      openDish(activeDish)
+    }
+  }
 
   // 打开 Modal 时：有运行/结果就回到它；否则回到最近一次历史（手滑关闭、后台跑完都能找回）
   useEffect(() => {
@@ -320,8 +379,21 @@ export function MealPlanModal() {
                 {menu.length > 0 && (
                   <div className="mt-2.5 space-y-2.5">
                     {menu.map((d, i) => (
-                      <div key={i} className="rounded-lg p-2.5" style={{ backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-color)' }}>
-                        <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>🍽️ {d.name}</div>
+                      <button
+                        key={i}
+                        onClick={() => openDish(d)}
+                        className="group w-full text-left rounded-lg p-2.5 transition-all hover:shadow-[var(--shadow)]"
+                        style={{ backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-color)' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)' }}
+                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-color)' }}
+                        title="查看这道菜的完整做法"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>🍽️ {d.name}</div>
+                          <span className="flex items-center gap-0.5 text-xs shrink-0 opacity-70 group-hover:opacity-100 transition-opacity" style={{ color: 'var(--accent)' }}>
+                            查看做法 <ChevronRight size={13} />
+                          </span>
+                        </div>
                         {d.reason && (
                           <div className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{d.reason}</div>
                         )}
@@ -334,7 +406,7 @@ export function MealPlanModal() {
                             ))}
                           </div>
                         )}
-                      </div>
+                      </button>
                     ))}
                     {retrieved.length > 0 && (
                       <div className="text-xs pt-0.5" style={{ color: 'var(--text-secondary)', opacity: 0.8 }}>
@@ -381,6 +453,69 @@ export function MealPlanModal() {
           )}
         </div>
       </div>
+
+      {/* 菜谱卡浮层：点击某道菜后弹出完整做法（盖在配餐 Modal 之上） */}
+      {activeDish && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60"
+          onClick={(e) => { e.stopPropagation(); closeDish() }}
+        >
+          <div
+            className="w-full max-w-xl max-h-[88vh] flex flex-col rounded-2xl overflow-hidden"
+            style={{ backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-color)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 py-3.5 flex items-center justify-between shrink-0" style={{ borderBottom: '1px solid var(--border-color)' }}>
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold truncate" style={{ color: 'var(--text-primary)' }}>🍽️ {activeDish.name}</h3>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                  {recipeLoading
+                    ? '正在准备菜谱…'
+                    : recipe?._source === 'local'
+                      ? '📚 来自本地菜谱库'
+                      : recipe?._source === 'ai'
+                        ? '✨ AI 为你现编'
+                        : '完整做法'}
+                </p>
+              </div>
+              <button
+                onClick={closeDish}
+                aria-label="返回配餐"
+                className="p-1 rounded-lg transition-colors shrink-0"
+                style={{ color: 'var(--text-secondary)' }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent)' }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-secondary)' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              {recipeLoading && (
+                <div className="flex flex-col items-center justify-center gap-3 py-16 px-5 text-center">
+                  <Spinner />
+                  <p className="text-sm leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                    正在为「{activeDish.name}」准备菜谱…<br />本地有同名菜会瞬时返回，否则由 AI 现编
+                  </p>
+                </div>
+              )}
+              {!recipeLoading && recipeError && (
+                <div className="py-16 px-5 text-center space-y-3">
+                  <p className="text-sm" style={{ color: 'var(--accent-red, #ef4444)' }}>生成失败：{recipeError}</p>
+                  <button onClick={retryDish} className="px-4 py-2 rounded-lg text-sm font-medium" style={{ backgroundColor: 'var(--accent)', color: '#fff' }}>
+                    重试
+                  </button>
+                </div>
+              )}
+              {!recipeLoading && !recipeError && recipe && (
+                <div className="px-4 pb-4">
+                  <RecipeCard recipe={recipe} />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

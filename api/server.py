@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.agents.ai_chef import chat_stream
 from app.agents.meal_crew import crew_stream
+from app.recipe_card import stream_recipe
 from app.preferences import get_preferences, add_preference, remove_preference
 from app.fitness import get_profile, save_profile, get_daily_targets
 from app.modes import get_mode, set_mode, list_modes
@@ -64,6 +65,12 @@ class MealPlanRequest(BaseModel):
     request: str         # 用户的配餐需求（多 Agent 套餐规划用）
 
 
+class RecipeCardRequest(BaseModel):
+    name: str                                   # 菜名（来自配餐菜单里的某道菜）
+    ingredients: Optional[List[Any]] = None     # 该菜的食材[{name, amount}]，用于约束生成
+    notes: Optional[str] = None                 # 该菜在本次配餐中的定位（dish.reason）
+
+
 class FoodEntryRequest(BaseModel):
     name: str
     calories: float = 0
@@ -106,6 +113,29 @@ async def meal_plan(request: MealPlanRequest):
         yield ": connected\n\n"   # 立即发字节，避免网关在后端思考期间判超时（同 /api/chat）
         try:
             for event in crew_stream(request.request):
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'content': str(e)}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+@app.post("/api/recipe")
+async def recipe_card(req: RecipeCardRequest):
+    """按菜名产出一张完整菜谱卡（本地命中→真实菜谱；否则 LLM 现编）。
+    用 SSE + token 心跳：边生成边发字节，避免网关在 LLM 思考期间判超时（同 /api/chat）。"""
+    def event_stream():
+        yield ": connected\n\n"
+        try:
+            for event in stream_recipe(req.name, req.ingredients, req.notes):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'content': str(e)}, ensure_ascii=False)}\n\n"

@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.agents.ai_chef import chat_stream
 from app.agents.meal_crew import crew_stream
 from app.recipe_card import stream_recipe
+from app.recipe_rag import library_counts
 from app.preferences import get_preferences, add_preference, remove_preference
 from app.fitness import get_profile, save_profile, get_daily_targets
 from app.modes import get_mode, set_mode, list_modes
@@ -155,6 +156,12 @@ async def recipe_card(req: RecipeCardRequest):
 async def cache_stats():
     """缓存命中情况（后端 redis/memory、命中率）—— 量化缓存对延迟/成本的收益。"""
     return get_cache().stats()
+
+
+@app.get("/api/recipe-library/stats")
+async def recipe_library_stats():
+    """菜谱库存量（人工 / AI 回流 / 合计）—— 展示知识库自进化的增长。"""
+    return library_counts()
 
 
 @app.get("/api/preferences")

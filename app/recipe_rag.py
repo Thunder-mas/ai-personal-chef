@@ -14,6 +14,7 @@ os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
 import json
 import hashlib
 import logging
+import threading
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
@@ -24,7 +25,13 @@ logger = logging.getLogger(__name__)
 # ==================== 路径与模型 ====================
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _RECIPES_PATH = _PROJECT_ROOT / "data" / "recipes.json"
+# AI 现编并通过质量门槛的菜谱回流到这里（运行时数据，gitignore，与人工库分开互不污染）
+_GENERATED_PATH = _PROJECT_ROOT / "resources" / "recipes_generated.json"
 _VECTOR_CACHE = _PROJECT_ROOT / "resources" / "recipe_vectors.npz"
+
+# 回流入库的写锁（同进程并发写串行化）+ 容量上限（防止无界增长拖慢重建）
+_write_lock = threading.Lock()
+_MAX_GENERATED = int(os.getenv("RECIPE_WRITEBACK_MAX", "200"))
 # embedding 模型缓存到项目内固定目录：首次联网下载，之后直接从磁盘加载（不再联网）
 _MODEL_CACHE_DIR = _PROJECT_ROOT / "resources" / "fastembed_cache"
 _MODEL_NAME = "BAAI/bge-small-zh-v1.5"  # 中文专用、512 维、体积小
@@ -33,6 +40,7 @@ _MODEL_NAME = "BAAI/bge-small-zh-v1.5"  # 中文专用、512 维、体积小
 _embedder = None
 _recipes: Optional[List[Dict[str, Any]]] = None
 _matrix: Optional[np.ndarray] = None  # 形状 (N, dim)，已 L2 归一化
+_reranker = None  # BGE-Reranker 单例；None = 未初始化，False = 不可用
 
 
 # ==================== embedding ====================
@@ -87,10 +95,76 @@ def _recipe_to_text(r: Dict[str, Any]) -> str:
     return " ".join(p for p in parts if p)
 
 
+# ==================== Reranking（精排）====================
+
+def _get_reranker():
+    """懒加载 BGE-Reranker：首次调用时才加载，不拖慢应用启动。
+    FlagEmbedding 未安装时静默返回 False，search() 自动跳过精排步骤。"""
+    global _reranker
+    if _reranker is not None:
+        return _reranker
+    try:
+        from FlagEmbedding import FlagReranker
+        _reranker = FlagReranker("BAAI/bge-reranker-base", use_fp16=True)
+        logger.info("BGE-Reranker 加载成功")
+    except Exception as e:
+        logger.warning("BGE-Reranker 不可用，跳过精排：%s", e)
+        _reranker = False
+    return _reranker
+
+
+def _rerank(query: str, candidates: List[Dict[str, Any]], k: int) -> List[Dict[str, Any]]:
+    """第二阶段精排：Cross-Encoder 同时看 query + 文档全文，比 Bi-Encoder 更能理解两者交互关系。
+    reranker 不可用时退化为截取前 k 条（单阶段检索），保证线上稳定。"""
+    reranker = _get_reranker()
+    if not reranker:
+        return candidates[:k]
+    pairs = [[query, _recipe_to_text(r)] for r in candidates]
+    scores = reranker.compute_score(pairs, normalize=True)
+    reranked = sorted(zip(scores, candidates), key=lambda x: x[0], reverse=True)
+    results = []
+    for score, recipe in reranked[:k]:
+        r = dict(recipe)
+        r["_rerank_score"] = round(float(score), 3)
+        results.append(r)
+    return results
+
+
 # ==================== 建库 / 缓存 ====================
 def _load_recipes() -> List[Dict[str, Any]]:
+    """检索用的全量菜谱 = 人工库(data/recipes.json) + AI 回流库(resources/recipes_generated.json)。
+    人工库在前、回流库在后；回流库读取失败时降级为空，绝不影响核心人工库的可用性。
+    两个后端(numpy/chroma)、主厨配餐、菜谱卡检索都走这里，回流的菜从此能被检索到。"""
     with open(_RECIPES_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+        recipes = json.load(f)
+    return recipes + _load_generated()
+
+
+def _load_generated() -> List[Dict[str, Any]]:
+    """读 AI 回流库；不存在/损坏都返回 []（best-effort，不拖垮 RAG）。"""
+    if not _GENERATED_PATH.exists():
+        return []
+    try:
+        with open(_GENERATED_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except Exception as e:
+        logger.warning("读取 AI 回流菜谱库失败，忽略：%s", e)
+        return []
+
+
+def _save_generated(items: List[Dict[str, Any]]) -> None:
+    """原子写：先写临时文件再 os.replace，避免并发/中断把文件写坏。"""
+    _GENERATED_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = _GENERATED_PATH.with_suffix(".json.tmp")
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(items, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, _GENERATED_PATH)
+
+
+def _norm_name(s: str) -> str:
+    """菜名归一（去空白 + 小写）用于去重。"""
+    return "".join((s or "").split()).lower()
 
 
 def _fingerprint(recipes: List[Dict[str, Any]]) -> str:
@@ -137,17 +211,24 @@ def _search_numpy(query: str, k: int = 3) -> List[Dict[str, Any]]:
 
 
 def search(query: str, k: int = 3) -> List[Dict[str, Any]]:
-    """RAG 检索统一入口：返回与 query 最相近的 k 条菜谱，每条附 _score 相似度。
-    后端由环境变量 RAG_BACKEND 决定：numpy（默认）| chroma。
-    chroma 不可用（未安装/出错）时自动回落 numpy，保证线上稳定。"""
+    """RAG 检索统一入口：两阶段检索。
+    第一阶段（召回）：Bi-Encoder 向量检索 Top-N，快，覆盖广。
+    第二阶段（精排）：BGE-Reranker Cross-Encoder 重排 → Top-k，准，理解 query 与文档的交互。
+    RAG_BACKEND=chroma 切换向量后端；RAG_RERANK=0 跳过精排（降级到单阶段）。"""
+    recall_k = max(k * 5, 20)  # 多召回，给精排足够候选
     backend = os.getenv("RAG_BACKEND", "numpy").lower()
     if backend == "chroma":
         try:
             from app.recipe_rag_chroma import search as _chroma_search
-            return _chroma_search(query, k)
+            candidates = _chroma_search(query, recall_k)
         except Exception as e:
             logger.warning("Chroma 后端不可用，回落 numpy：%s", e)
-    return _search_numpy(query, k)
+            candidates = _search_numpy(query, recall_k)
+    else:
+        candidates = _search_numpy(query, recall_k)
+    if os.getenv("RAG_RERANK", "1") != "0":
+        return _rerank(query, candidates, k)
+    return candidates[:k]
 
 
 # ---- 评测/对照脚本与 chroma 后端复用的显式入口（保证两版用同一套向量，对比公平）----
@@ -163,6 +244,66 @@ def rebuild() -> int:
     """强制重建向量库（编辑过 data/recipes.json 后可手动调用）。返回菜谱条数。"""
     _ensure_index(force=True)
     return len(_recipes or [])
+
+
+# ==================== 自进化：AI 菜谱回流入库 ====================
+def add_generated_recipe(recipe: Dict[str, Any]) -> bool:
+    """把一条 AI 现编的菜谱回流进本地库，使其之后能被 RAG 检索到（数据飞轮 / 自进化知识库）。
+
+    细节都在这里兜住：
+      - 去重：与「人工库 + 已回流」任一同名(归一后)即跳过，避免重复入库；
+      - 容量上限：超过 _MAX_GENERATED 不再写，防止无界增长拖慢重建；
+      - 原子落盘：临时文件 + os.replace；整段加写锁，并发安全；
+      - 索引刷新：已加载则增量 append 到内存矩阵并持久化(只 embedding 这一条，省算力)，
+        未加载则下次检索按合并后的文件整体重建；
+      - 同时失效 Chroma 内存缓存，让 chroma 后端下次检索按指纹变化自动重建。
+    返回是否真的写入。质量门槛由调用方(recipe_card)把关。"""
+    global _recipes, _matrix
+    name = (recipe.get("name") or "").strip()
+    if not name:
+        return False
+
+    with _write_lock:
+        gen = _load_generated()
+        if any(_norm_name(r.get("name", "")) == _norm_name(name) for r in _load_recipes()):
+            return False  # 人工库或已回流里已有同名
+        if len(gen) >= _MAX_GENERATED:
+            logger.info("AI 回流菜谱库已达上限 %d，跳过：%s", _MAX_GENERATED, name)
+            return False
+
+        gen.append(recipe)
+        _save_generated(gen)
+
+        # numpy 内存索引：已加载就增量更新（先赋更长的 _recipes，再赋 _matrix，规避并发读越界）
+        if _recipes is not None and _matrix is not None:
+            try:
+                vec = _embed([_recipe_to_text(recipe)])          # (1, dim)
+                _recipes = _recipes + [recipe]
+                _matrix = np.vstack([_matrix, vec])
+                np.savez(_VECTOR_CACHE, matrix=_matrix,
+                         fingerprint=np.array(_fingerprint(_recipes)))
+            except Exception as e:
+                logger.warning("回流后增量更新向量索引失败，置空待重建：%s", e)
+                _recipes, _matrix = None, None
+
+        # Chroma 后端（若曾启用）：失效其内存缓存，下次检索按指纹/条数变化自动重建
+        try:
+            import sys
+            ch = sys.modules.get("app.recipe_rag_chroma")
+            if ch is not None:
+                ch._recipes_cache = None
+                ch._collection = None
+        except Exception:
+            pass
+        return True
+
+
+def library_counts() -> Dict[str, int]:
+    """库存量（人工 / AI 回流 / 合计），用于展示"知识库自动长大了多少"。"""
+    with open(_RECIPES_PATH, "r", encoding="utf-8") as f:
+        human = len(json.load(f))
+    gen = len(_load_generated())
+    return {"human": human, "generated": gen, "total": human + gen}
 
 
 if __name__ == "__main__":

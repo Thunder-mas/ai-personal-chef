@@ -28,6 +28,10 @@ resources/personal_chief.db
 # RAG 向量缓存（由 data/recipes.json 自动重建，不入库）
 resources/recipe_vectors.npz
 
+# AI 现编回流的菜谱库（运行时自进化生成，不入库；容器重启可能重置）
+resources/recipes_generated.json
+resources/recipes_generated.json.tmp
+
 # Chroma 向量库（chroma 后端的持久化目录，由 data/recipes.json 自动重建，不入库）
 resources/chroma_db/
 

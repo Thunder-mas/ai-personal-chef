@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.agents.ai_chef import chat_stream
 from app.agents.meal_crew import crew_stream
-from app.recipe_card import stream_recipe
+from app.recipe_card import stream_recipe, ingest_recipe
 from app.recipe_rag import library_counts
 from app.preferences import get_preferences, add_preference, remove_preference
 from app.fitness import get_profile, save_profile, get_daily_targets
@@ -70,6 +70,11 @@ class RecipeCardRequest(BaseModel):
     name: str                                   # 菜名（来自配餐菜单里的某道菜）
     ingredients: Optional[List[Any]] = None     # 该菜的食材[{name, amount}]，用于约束生成
     notes: Optional[str] = None                 # 该菜在本次配餐中的定位（dish.reason）
+
+
+class RecipeIngestRequest(BaseModel):
+    recipe: dict                                # 完整菜谱(RecipeData 形状)
+    source: Optional[str] = "favorite"          # 来源：favorite(收藏) / log(记录) 等
 
 
 class FoodEntryRequest(BaseModel):
@@ -162,6 +167,14 @@ async def cache_stats():
 async def recipe_library_stats():
     """菜谱库存量（人工 / AI 回流 / 合计）—— 展示知识库自进化的增长。"""
     return library_counts()
+
+
+@app.post("/api/recipe-library")
+async def add_recipe_to_library(req: RecipeIngestRequest):
+    """对话里收藏/记录一道菜时，把它回流进本地知识库（用户认可 = 高质量飞轮信号）。
+    经质量门槛 + 去重 + 近似重复过滤，重复/低质会被静默跳过。"""
+    added = ingest_recipe(req.recipe, source=req.source or "user")
+    return {"added": added, **library_counts()}
 
 
 @app.get("/api/preferences")

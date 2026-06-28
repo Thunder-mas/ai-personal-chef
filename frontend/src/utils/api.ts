@@ -137,6 +137,21 @@ export async function getRecipe(
   throw new Error('未收到菜谱数据')
 }
 
+// 对话里收藏/记录一道菜 → 把它回流进本地知识库（数据飞轮）。
+// 后端做质量门槛 + 去重，重复/低质会被静默跳过；失败不影响前端，调用方 fire-and-forget。
+export async function addRecipeToLibrary(
+  recipe: RecipeData,
+  source: 'favorite' | 'log' = 'favorite'
+): Promise<{ added: boolean; human: number; generated: number; total: number }> {
+  const response = await fetch('/api/recipe-library', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ recipe, source }),
+  })
+  if (!response.ok) throw new Error(`HTTP ${response.status}`)
+  return response.json()
+}
+
 export async function* streamChat(
   messages: Message[],
   signal?: AbortSignal,

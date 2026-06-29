@@ -12,6 +12,13 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# 先载入 .env，再按需启用 LangSmith 链路追踪：没配 key 则 no-op，线上零影响；
+# 配了 key 后，下面所有 langchain/langgraph 的 LLM 调用与 Agent 节点会被自动追踪。
+from dotenv import load_dotenv
+load_dotenv()
+from app.tracing import init_tracing
+init_tracing()
+
 from app.agents.ai_chef import chat_stream
 from app.agents.meal_crew import crew_stream
 from app.recipe_card import stream_recipe, ingest_recipe

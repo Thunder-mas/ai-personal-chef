@@ -211,11 +211,16 @@ def _search_numpy(query: str, k: int = 3) -> List[Dict[str, Any]]:
 
 
 def search(query: str, k: int = 3) -> List[Dict[str, Any]]:
-    """RAG 检索统一入口：两阶段检索。
-    第一阶段（召回）：Bi-Encoder 向量检索 Top-N，快，覆盖广。
-    第二阶段（精排）：BGE-Reranker Cross-Encoder 重排 → Top-k，准，理解 query 与文档的交互。
-    RAG_BACKEND=chroma 切换向量后端；RAG_RERANK=0 跳过精排（降级到单阶段）。"""
-    recall_k = max(k * 5, 20)  # 多召回，给精排足够候选
+    """RAG 检索统一入口（可插拔两阶段，线上默认只走第一阶段）。
+    第一阶段（召回）：Bi-Encoder 向量检索 Top-N，快、覆盖广 —— 默认就到这一步。
+    第二阶段（精排，可选）：BGE-Reranker Cross-Encoder 重排 → Top-k，理解 query 与文档的交互。
+    RAG_BACKEND=chroma 切换向量后端；RAG_RERANK=1 开启精排。
+
+    为何默认单阶段：当前 48 条小库经评测 base Top-3 命中率已 100%（见 eval/report.md），
+    精排没有提升空间，还要多背 torch/FlagEmbedding 依赖。精排的价值在召回候选多、
+    有难负例的万级以上大库 —— 届时装 FlagEmbedding 并设 RAG_RERANK=1 即开启
+    （未装则 _rerank 仍会优雅降级回单阶段，绝不报错）。"""
+    recall_k = max(k * 5, 20)  # 多召回，给精排（若开启）足够候选
     backend = os.getenv("RAG_BACKEND", "numpy").lower()
     if backend == "chroma":
         try:
@@ -226,7 +231,7 @@ def search(query: str, k: int = 3) -> List[Dict[str, Any]]:
             candidates = _search_numpy(query, recall_k)
     else:
         candidates = _search_numpy(query, recall_k)
-    if os.getenv("RAG_RERANK", "1") != "0":
+    if os.getenv("RAG_RERANK", "0") == "1":   # 默认单阶段；显式开启才走精排
         return _rerank(query, candidates, k)
     return candidates[:k]
 

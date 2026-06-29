@@ -14,13 +14,14 @@ load_dotenv()
 import os
 import re
 import json
+import time
 import logging
 from typing import Dict, Any, List, Optional
 
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_openai import ChatOpenAI
 
-from app.recipe_rag import search as rag_search
+from app.recipe_rag import search as rag_search, add_generated_recipe
 from app.cache import get_cache, make_key
 
 logger = logging.getLogger(__name__)
@@ -179,6 +180,58 @@ def _build_messages(name: str, ingredients: Optional[List[Dict[str, Any]]],
     return sys, human
 
 
+# ==================== 自进化：AI 菜谱回流入库 ====================
+def _is_quality(recipe: Dict[str, Any]) -> bool:
+    """回流质量门槛：字段完整、步骤够、非兜底占位，才允许进库，避免污染检索库。"""
+    if not (recipe.get("name") or "").strip():
+        return False
+    steps = recipe.get("steps") or []
+    if len(steps) < 2:
+        return False
+    if any("暂未生成详细步骤" in str(s) for s in steps):  # 拒绝兜底占位步骤
+        return False
+    if len(recipe.get("ingredients") or []) < 2:
+        return False
+    return True
+
+
+def ingest_recipe(recipe: Dict[str, Any], source: str = "user",
+                  hits: Optional[List[Dict[str, Any]]] = None) -> bool:
+    """把一条完整菜谱回流进本地库（统一入口，best-effort，绝不抛错影响调用方）。
+    三道关：质量门槛 → 近似重复(与库中已有高度相似不入) → 同名去重(在 add 里)。
+    source 记录来源做 provenance：'ai'(配餐现编) / 'favorite'(对话收藏) / 'log'(对话记录)。
+    hits 传入则复用(省一次检索)；不传则自己检索一次做近似重复判断。
+    RECIPE_WRITEBACK=0 可整体关闭。返回是否真的写入。"""
+    if os.getenv("RECIPE_WRITEBACK", "1") == "0":
+        return False
+    try:
+        if not _is_quality(recipe):
+            return False
+        name = (recipe.get("name") or "").strip()
+        if hits is None:
+            try:
+                hits = rag_search(name, k=1)
+            except Exception:
+                hits = []
+        # 近似重复：库里已有高度相似的菜（多半是同一道菜换个名字）→ 不重复入库
+        if hits and max((h.get("_score") or 0) for h in hits) >= 0.95:
+            return False
+        persist = {k: recipe[k] for k in _RECIPE_KEYS if k in recipe}
+        persist["source"] = source                # 标注来源，便于日后审核/清理/晋升
+        persist["createdAt"] = int(time.time())
+        if add_generated_recipe(persist):
+            logger.info("菜谱已回流入库(%s)：%s", source, persist.get("name"))
+            return True
+    except Exception as e:
+        logger.warning("菜谱回流入库失败：%s", e)
+    return False
+
+
+def _maybe_write_back(recipe: Dict[str, Any], hits: List[Dict[str, Any]]) -> None:
+    """配餐现编路径的回流：复用已检索的 hits，标来源 ai。"""
+    ingest_recipe(recipe, source="ai", hits=hits)
+
+
 # ==================== 对外：流式（带 token 心跳，规避网关在 LLM 思考期间判超时）====================
 def stream_recipe(name: str, ingredients: Optional[List[Dict[str, Any]]] = None,
                   notes: Optional[str] = None):
@@ -237,6 +290,8 @@ def stream_recipe(name: str, ingredients: Optional[List[Dict[str, Any]]] = None,
     recipe["_source"] = "ai"       # AI 生成
     recipe["_cached"] = False
     cache.set_json(key, recipe)
+    # 自进化：把这条 AI 菜谱回流进本地库（带质量门槛/去重），下次同名直接走本地命中
+    _maybe_write_back(recipe, hits)
     yield {"type": "recipe", "recipe": recipe}
 
 

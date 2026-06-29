@@ -3,6 +3,7 @@ import { Heart, Clock, Users, ChefHat, Plus } from 'lucide-react'
 import type { RecipeData } from '../../types/chat'
 import { useChatStore } from '../../store/useChatStore'
 import { addFoodEntry } from '../../utils/foodLog'
+import { addRecipeToLibrary } from '../../utils/api'
 
 interface RecipeCardProps {
   recipe: RecipeData
@@ -22,7 +23,12 @@ export function RecipeCard({ recipe }: RecipeCardProps) {
   }
 
   const handleFavorite = () => {
+    const willFavorite = !isFavorite
     toggleFavoriteRecipe(recipe)
+    // 收藏(非取消收藏)= 用户认可 → 回流进知识库（fire-and-forget，失败不影响收藏）
+    if (willFavorite) {
+      addRecipeToLibrary(recipe, 'favorite').catch(() => {})
+    }
   }
 
   const [logged, setLogged] = useState(false)
@@ -38,6 +44,8 @@ export function RecipeCard({ recipe }: RecipeCardProps) {
       })
       setLogged(true)
       setTimeout(() => setLogged(false), 2000)
+      // 记录这道菜 = 用户认可 → 顺带回流进知识库（fire-and-forget）
+      addRecipeToLibrary(recipe, 'log').catch(() => {})
     } catch {
       /* 静默失败 */
     }

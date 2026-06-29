@@ -1,7 +1,7 @@
 [project]
 name = "ai-personal-chef"
 version = "0.1.0"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "chromadb>=1.0.0",
     "dashscope>=1.25.17",
@@ -14,6 +14,7 @@ dependencies = [
     "langgraph>=0.6.11",
     "langgraph-checkpoint-sqlite>=2.0.11",
     "langgraph-cli[inmem]>=0.4.3",
+    "mcp>=1.2",
     "notebook>=7.3.3",
     "openai>=1.6.1,<2.0.0",
     "python-dotenv>=1.0.1",
@@ -21,3 +22,11 @@ dependencies = [
     "streamlit>=1.50.0",
     "uvicorn>=0.39.0",
 ]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"

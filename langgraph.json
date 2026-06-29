@@ -1,0 +1,8 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "meal_crew": "./app/agents/meal_crew.py:_workflow",
+    "ai_chef": "./app/agents/ai_chef.py:workflow"
+  },
+  "env": ".env"
+}

@@ -22,6 +22,9 @@ __pycache__/
 # LangGraph 对话记忆（运行时数据，会不断变大，不入库）
 resources/checkpoints.db
 
+# LangGraph dev / Studio 运行时目录（langgraph dev 自动生成，不入库）
+.langgraph_api/
+
 # 业务数据库（含个人偏好/健身档案/饮食记录等隐私数据，首次运行自动创建，不入库）
 resources/personal_chief.db
 

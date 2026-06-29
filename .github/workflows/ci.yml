@@ -1,0 +1,31 @@
+name: CI
+
+# 推送到 main / feature 分支或提 PR 时，自动跑单元测试。
+# 单测是确定性的（不连 Redis、不下 embedding 模型、不调 LLM、不连网络），秒级跑完，适合放 CI。
+on:
+  push:
+    branches: [main, "feature/**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install test dependencies
+        # 只装单测代码的 import 闭包：numpy / langchain-openai(含 langchain-core) /
+        # python-dotenv，外加 pytest。刻意不装 fastembed / chromadb / streamlit ——
+        # embedding 模型加载与向量检索质量属 eval/ 评测范畴，不进 push-CI（会下大模型、慢且偶发）。
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest numpy langchain-openai python-dotenv
+
+      - name: Run unit tests
+        run: pytest -q
